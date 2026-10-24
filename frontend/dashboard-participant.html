@@ -1,1 +1,101 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Participant dashboard | EventAdda</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="css/extra.css"></head><body data-page="participant-dashboard"><header class="header"><a class="brand" href="index.html"><span class="brand-icon">E</span> Event<span>Adda</span></a><nav><a href="events.html">All events</a><a href="index.html#categories">Categories</a><a href="index.html#how">How it works</a></nav><div class="header-actions"><a class="btn btn-light" href="login.html">Log in</a><a class="btn btn-primary" href="signup.html">Get started</a></div><button class="menu-toggle" aria-label="Open menu">☰</button></header><main class="container events-page"><span class="eyebrow">PARTICIPANT DASHBOARD</span><h1>Welcome, <em id="userName"></em></h1><p class="muted">Browse published events, manage your profile and onboarding preferences, and discover opportunities tailored to you.</p><div id="stage1ProfileSection" class="profile-panel"></div><div id="eventsStatusBanner"></div><div class="filter-row"><input id="eventSearch" type="search" placeholder="Search events or topics…" aria-label="Search events"><select id="categoryFilter" aria-label="Filter by category"><option value="All">All categories</option><option>Hackathon</option><option>Tech Talk</option><option>Workshop</option><option>Startup</option><option>Music</option><option>Sports</option><option>Art</option><option>Food</option></select></div><div id="eventGrid" class="event-grid"></div><p id="emptyState" class="empty-state" hidden>No events match your search. Try another keyword or category.</p></main><footer class="footer"><a class="brand" href="index.html"><span class="brand-icon">E</span> Event<span>Adda</span></a><p>Discover. Connect. Participate.</p><span>© 2026 EventAdda</span></footer><script src="js/main.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Participant dashboard | EventADDA</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/extra.css">
+</head>
+<body data-page="participant-dashboard">
+  <header class="header">
+    <a class="brand" href="index.html">Event<span>ADDA</span></a>
+    <nav>
+      <a href="events.html">All events</a>
+      <a href="index.html#categories">Categories</a>
+      <a href="index.html#how">How it works</a>
+    </nav>
+    <div class="header-actions">
+      <a class="btn btn-light" href="login.html">Log in</a>
+      <a class="btn btn-primary" href="signup.html">Get started</a>
+    </div>
+    <button class="menu-toggle" aria-label="Open menu">☰</button>
+  </header>
+
+  <main class="container events-page">
+    <section class="discovery-hero participant-hero">
+      <div class="discovery-hero-copy">
+        <div class="eyebrow-row">
+          <span class="eyebrow">PARTICIPANT DASHBOARD</span>
+          <span id="eventCountBadge" class="live-count-pill">Loading events…</span>
+        </div>
+        <h1>Welcome, <em id="userName"></em></h1>
+        <p class="muted">Events matching your selected interests are prioritized first. Manage your profile or explore upcoming experiences below.</p>
+        <div id="participantSummaryBar" class="participant-summary-bar"></div>
+      </div>
+      <div class="discovery-hero-actions">
+        <button id="toggleProfileBtn" type="button" class="btn btn-light profile-toggle-btn" aria-expanded="false" aria-controls="stage1ProfileSection">
+          <span>⚙ Account &amp; Preferences</span>
+        </button>
+      </div>
+    </section>
+
+    <div id="stage1ProfileSection" class="profile-panel"></div>
+    <div id="eventsStatusBanner"></div>
+
+    <div id="categoryPills" class="category-pills" role="tablist" aria-label="Filter by category quick pills">
+      <button type="button" class="category-pill active" data-pill-category="All">✦ All For You</button>
+      <button type="button" class="category-pill" data-pill-category="Hackathon">⌘ Hackathon</button>
+      <button type="button" class="category-pill" data-pill-category="Tech Talk">◎ Tech Talk</button>
+      <button type="button" class="category-pill" data-pill-category="Workshop">✳ Workshop</button>
+      <button type="button" class="category-pill" data-pill-category="Startup">✦ Startup</button>
+      <button type="button" class="category-pill" data-pill-category="Music">♫ Music</button>
+      <button type="button" class="category-pill" data-pill-category="Sports">⚽ Sports</button>
+      <button type="button" class="category-pill" data-pill-category="Art">✎ Art</button>
+      <button type="button" class="category-pill" data-pill-category="Food">🍽 Food</button>
+    </div>
+
+    <div class="filter-row filter-toolbar">
+      <div class="search-field-wrap">
+        <span class="search-icon" aria-hidden="true">⌕</span>
+        <input id="eventSearch" type="search" placeholder="Search by title, topic, city, venue, or organizer…" aria-label="Search events">
+      </div>
+      <select id="categoryFilter" aria-label="Filter by category">
+        <option value="All">All categories</option>
+        <option>Hackathon</option>
+        <option>Tech Talk</option>
+        <option>Workshop</option>
+        <option>Startup</option>
+        <option>Music</option>
+        <option>Sports</option>
+        <option>Art</option>
+        <option>Food</option>
+      </select>
+      <select id="priceFilter" aria-label="Filter by price">
+        <option value="All">All prices</option>
+        <option value="free">Free entry</option>
+        <option value="paid">Paid / Ticketed</option>
+      </select>
+      <button id="resetFiltersBtn" type="button" class="btn btn-light btn-reset-filters" hidden>Reset filters</button>
+    </div>
+
+    <div id="resultsSummary" class="results-bar" aria-live="polite"></div>
+
+    <div id="eventGrid" class="event-grid"></div>
+
+    <div id="emptyState" class="empty-state empty-state-card" hidden>
+      <div class="empty-state-icon">✦</div>
+      <h3>No events match your current filters</h3>
+      <p>Try broadening your keyword search or switching back to all categories and price tiers.</p>
+      <button id="emptyResetBtn" type="button" class="btn btn-primary">Reset all filters →</button>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <a class="brand" href="index.html">Event<span>ADDA</span></a>
+    <p>Discover. Connect. Participate.</p>
+    <span>© 2026 EventADDA</span>
+  </footer>
+  <script src="js/main.js"></script>
+</body>
+</html>

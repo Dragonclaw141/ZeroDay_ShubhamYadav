@@ -44,12 +44,17 @@ async def create_user_account(
         )
 
     now = datetime.now(timezone.utc)
+    affiliation = payload.affiliation_details if payload.role == "participant" else None
+    organization = payload.organization_name if payload.role == "organizer" else None
+
     user_doc: dict[str, Any] = {
         "full_name": payload.full_name,
         "email": normalized_email,
         "phone": normalized_phone,
         "password_hash": hash_password(payload.password),
         "role": payload.role,
+        "affiliation_details": affiliation,
+        "organization_name": organization,
         "interests": [],
         "location": None,
         "onboarding_completed": False,

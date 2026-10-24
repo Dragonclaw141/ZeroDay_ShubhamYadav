@@ -1,9 +1,10 @@
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pymongo import ASCENDING
 from pymongo.collation import Collation
+from pymongo.errors import OperationFailure
 
 from app.config import settings
 
@@ -13,8 +14,8 @@ _client: Optional[AsyncIOMotorClient] = None
 _database: Optional[AsyncIOMotorDatabase] = None
 
 
-async def connect_to_mongo() -> None:
-    """Initialize Motor client and ensure Stage 1 indexes safely."""
+async def connect_to_mongo(app: Optional[Any] = None) -> None:
+    """Initialize the shared Motor client and ensure database indexes safely."""
     global _client, _database
     if _client is None:
         _client = AsyncIOMotorClient(
@@ -23,8 +24,13 @@ async def connect_to_mongo() -> None:
         )
         _database = _client[settings.DATABASE_NAME]
 
+    if app is not None:
+        app.mongodb_client = _client
+        app.db = _database
+
     try:
         await ensure_indexes(_database)
+        logger.info("Connected to MongoDB (%s)", settings.DATABASE_NAME)
     except Exception as exc:
         logger.warning(
             "Database index initialization deferred (MongoDB not yet reachable): %s",
@@ -35,12 +41,17 @@ async def connect_to_mongo() -> None:
 async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
     """Create required Stage 1 indexes idempotently on the users collection."""
     users = db["users"]
-    await users.create_index(
-        [("email", ASCENDING)],
-        name="idx_email_unique",
-        unique=True,
-        collation=Collation(locale="en", strength=2),
-    )
+    try:
+        await users.create_index(
+            [("email", ASCENDING)],
+            name="idx_email_unique",
+            unique=True,
+            collation=Collation(locale="en", strength=2),
+        )
+    except OperationFailure:
+        # Fallback if a default unique index on email (e.g. email_1) already exists
+        await users.create_index("email", unique=True)
+
     await users.create_index(
         [("phone", ASCENDING)],
         name="idx_phone_unique",
@@ -53,13 +64,17 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
     )
 
 
-async def close_mongo_connection() -> None:
+async def close_mongo_connection(app: Optional[Any] = None) -> None:
     """Close Motor client connection cleanly."""
     global _client, _database
     if _client is not None:
         _client.close()
         _client = None
         _database = None
+        logger.info("MongoDB connection closed")
+    if app is not None:
+        app.mongodb_client = None
+        app.db = None
 
 
 def get_database() -> AsyncIOMotorDatabase:

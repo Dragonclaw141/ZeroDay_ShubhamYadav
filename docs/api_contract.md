@@ -1,4 +1,4 @@
-﻿# EventAdda â€” Shared API Contract (Stage 1)
+# EventAdda â€” Shared API Contract (Stage 1)
 
 **Base URL (Local Development):** `http://localhost:8000`
 **Interactive OpenAPI Docs:** `http://localhost:8000/docs`
@@ -272,3 +272,122 @@ Update the authenticated user's own profile fields. Account `role` and `email` a
   - `401 Unauthorized`: Missing or invalid token
   - `409 Conflict`: New phone number is already registered to another user
   - `422 Unprocessable Content`: Invalid field values or attempt to modify immutable fields (such as `role`)
+
+
+---
+
+## 6. Stage 2 — Event Discovery & Organizer Event Management Endpoints
+
+### 6.1 Public & Participant Event Discovery
+
+#### `GET /api/events`
+List published events with optional filters and pagination.
+
+- **Auth Required:** No (Public)
+- **Query Parameters:**
+  - `category` (optional): Canonical slug (`hackathons`, `workshops`, `summits_conferences`, `meetups`, `tech`, `business`, `arts`, `sports`, `design`) or frontend label (`Hackathon`, `Tech Talk`, `Workshop`, `Startup`, `Music`, `Sports`, `Art`, `Food`).
+  - `city` (optional): Case-insensitive venue city match.
+  - `price_type` (optional): Filter by `"free"` or `"paid"`. Omitting `price_type` returns both free and paid published events.
+  - `search` (optional): Case-insensitive keyword search across title, description, category, tags, venue, and organizer name.
+  - `date_from` / `date_to` (optional): ISO 8601 datetime bounds on `start_date`.
+  - `sort` (optional): `date_asc` (default), `date_desc`, or `popularity`.
+  - `page` (default `1`), `limit` (default `20`, max `50`).
+- **Success Response (`200 OK`):** `EventListResponse` (`{ "events": [EventResponse], "total": int, "page": int, "limit": int }`).
+
+#### `GET /api/events/categories/{category}`
+Category card drill-down endpoint returning published events in a specific category.
+
+- **Auth Required:** No (Public)
+- **Success Response (`200 OK`):**
+  ```json
+  {
+    "category": "hackathons",
+    "category_display": "Hackathons",
+    "events": [ "...EventResponse items..." ],
+    "total": 1,
+    "page": 1,
+    "limit": 20
+  }
+  ```
+
+#### `GET /api/events/recommendations`
+Return personalized upcoming event recommendations for an onboarded participant.
+
+- **Auth Required:** Yes (`participant` only, with `onboarding_completed == true`)
+- **Scoring Rules:** Interest match (50%), city/coordinate proximity (30%), upcoming freshness (20%). Excludes unpublished, cancelled, past, expired-deadline, or full-capacity events.
+- **Success Response (`200 OK`):** `RecommendationListResponse` (`{ "recommendations": [RecommendedEventItem], "total": int }`).
+- **Error Statuses:** `400 Bad Request` (onboarding incomplete), `401 Unauthorized`, `403 Forbidden` (not a participant).
+
+#### `GET /api/events/{event_id}`
+Get full details of an event.
+
+- **Auth Required:** Public for `published` events; owning `organizer` may also view their own `draft` or `cancelled` events.
+- **Success Response (`200 OK`):** `EventResponse`.
+- **Error Statuses:** `404 Not Found` (non-existent ID, invalid ObjectId, or non-owner requesting unpublished/cancelled event).
+
+---
+
+### 6.2 Organizer Event Management (`role == "organizer"` required)
+
+#### `POST /api/organizer/events`
+Create a new event (`draft` or `published`).
+
+- **Auth Required:** Yes (`organizer` only)
+- **Request Body (`EventCreateRequest`):**
+  ```json
+  {
+    "title": "HackPune 2026 — 36-Hour National Hackathon",
+    "description": "Join developers for a coding marathon building AI and Web3 solutions.",
+    "category": "hackathons",
+    "tags": ["ai", "web3", "python"],
+    "venue": {
+      "name": "Symbiosis Institute of Technology",
+      "address": "Gram Lavale, Mulshi",
+      "city": "Pune"
+    },
+    "start_date": "2026-11-15T09:00:00Z",
+    "end_date": "2026-11-16T21:00:00Z",
+    "registration_deadline": "2026-11-10T23:59:59Z",
+    "max_capacity": 200,
+    "status": "draft",
+    "mode": "In-person",
+    "price_type": "free",
+    "price_amount": null,
+    "registration_url": "https://forms.gle/exampleHackPune2026"
+  }
+  ```
+  - **Pricing & Registration URL Rules:**
+    - `price_type`: `"free"` (default) or `"paid"`. Legacy `is_free` boolean remains supported and synchronized (`is_free == (price_type == "free")`).
+    - `price_amount`: numeric amount in INR (`> 0`) required when `price_type == "paid"`; must be `null` or omitted when `price_type == "free"` (free events with a positive `price_amount` are rejected with `422`).
+    - `registration_url` (optional): Valid `http://` or `https://` external registration link (e.g., Google Form). EventAdda does not process payments or verify external form completion.
+  - **Date Rules:** `end_date` and `registration_deadline` default to `start_date` if omitted; `end_date >= start_date` and `registration_deadline <= start_date` are validated.
+- **Success Response (`201 Created`):** `EventMutationResponse` (`{ "message": "Event created successfully", "event": EventResponse, "notifications_sent": 0 }`).
+
+#### `GET /api/organizer/events`
+List events owned by the authenticated organizer (optional `?status=draft|published|cancelled`, `page`, `limit`).
+
+- **Auth Required:** Yes (`organizer` only)
+- **Success Response (`200 OK`):** `EventListResponse`.
+
+#### `GET /api/organizer/events/{event_id}`
+Retrieve full details for an event owned by the authenticated organizer.
+
+- **Auth Required:** Yes (`organizer` owner only; returns `403 Forbidden` if owned by another organizer).
+
+#### `PUT /api/organizer/events/{event_id}`
+Update fields of an owned event (`draft` or `published`). Cancelled events cannot be edited (`400 Bad Request`).
+
+- **Auth Required:** Yes (`organizer` owner only).
+- **Success Response (`200 OK`):** `EventMutationResponse`.
+
+#### `PATCH /api/organizer/events/{event_id}/publish`
+Transition an owned `draft` event to `published`.
+
+- **Auth Required:** Yes (`organizer` owner only).
+- **Error Statuses:** `400 Bad Request` (already published or cancelled), `403 Forbidden` (not owner), `404 Not Found`.
+
+#### `PATCH /api/organizer/events/{event_id}/cancel`
+Transition an owned `draft` or `published` event to `cancelled`.
+
+- **Auth Required:** Yes (`organizer` owner only).
+- **Error Statuses:** `400 Bad Request` (already cancelled), `403 Forbidden` (not owner), `404 Not Found`.

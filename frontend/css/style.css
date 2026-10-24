@@ -27,10 +27,9 @@ a{color:inherit;text-decoration:none}
 
 /* ============ Header ============ */
 .header{position:sticky;top:0;z-index:50;height:78px;padding:0 max(24px,calc((100% - 1120px)/2));display:flex;align-items:center;justify-content:space-between;gap:24px;background:rgba(255,255,255,.82);backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px);border-bottom:1px solid rgba(235,232,245,.9);animation:fadeIn .6s ease both}
-.brand{display:inline-flex;align-items:center;gap:7px;font-family:Manrope,sans-serif;font-size:22px;font-weight:800;letter-spacing:-1px;white-space:nowrap}
-.brand>span:last-child{color:var(--purple);margin-left:-7px}
-.brand-icon{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:11px;background:var(--grad);color:#fff;font-size:21px;box-shadow:0 6px 16px rgba(109,74,255,.32);transition:transform .4s var(--ease)}
-.brand:hover .brand-icon{transform:rotate(-8deg) scale(1.08)}
+.brand{display:inline-flex;align-items:baseline;font-family:Manrope,sans-serif;font-size:23px;font-weight:800;letter-spacing:-.8px;color:var(--ink);white-space:nowrap;transition:opacity .25s var(--ease)}
+.brand>span:last-child{color:var(--purple);letter-spacing:-.4px;font-weight:800}
+.brand:hover{opacity:.88}
 .header nav{display:flex;gap:30px;color:#5f5e76;font-size:14px;font-weight:500}
 .header nav a{position:relative;padding:4px 0;transition:color .25s}
 .header nav a::after{content:"";position:absolute;left:0;bottom:-2px;width:100%;height:2px;border-radius:2px;background:var(--grad);transform:scaleX(0);transform-origin:left;transition:transform .35s var(--ease)}
@@ -141,8 +140,7 @@ h1 em{font-style:normal;background:var(--grad);-webkit-background-clip:text;back
 
 /* ============ Footer ============ */
 .footer{border-top:1px solid var(--line);padding:24px max(24px,calc((100% - 1120px)/2));display:flex;align-items:center;justify-content:space-between;gap:20px;color:var(--muted);font-size:11px}
-.footer .brand{color:var(--ink);font-size:18px}
-.footer .brand-icon{width:29px;height:29px;font-size:17px}
+.footer .brand{color:var(--ink);font-size:19px}
 .footer p{margin:0}
 
 /* ============ Auth ============ */

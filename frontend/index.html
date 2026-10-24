@@ -1,9 +1,293 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>EventAdda — Discover your next opportunity</title><link rel="stylesheet" href="css/style.css"></head>
-<body>
-<header class="header"><a class="brand" href="index.html"><span class="brand-icon">E</span> Event<span>Adda</span></a><nav><a href="#categories">Explore</a><a href="#how">How it works</a></nav><div class="header-actions"><a class="btn btn-light" href="login.html">Log in</a><a class="btn btn-primary" href="signup.html">Get started</a></div><button class="menu-toggle" aria-label="Open menu">☰</button></header>
-<main><section class="hero container"><div class="hero-copy"><span class="eyebrow">YOUR NEXT OPPORTUNITY STARTS HERE</span><h1>Find events that fit <em>your ambition.</em></h1><p>Discover hackathons, workshops, summits and student opportunities picked around your interests — all in one place.</p><div class="hero-actions"><a class="btn btn-primary btn-large" href="signup.html">Build my profile <span>→</span></a><a class="btn btn-light btn-large" href="events.html">Explore events</a></div><div class="trust-note">✦ Made for curious minds and ambitious students</div></div><div class="hero-art"><div class="floating-card floating-top"><span class="float-icon">✦</span><div><b>Made for you</b><small>Based on your interests</small></div></div><div class="event-preview"><div class="preview-banner"><span>FEATURED OPPORTUNITY</span><div class="banner-symbol">⌘</div></div><div class="preview-body"><span class="tag tag-purple">HACKATHON</span><h3>Build for Tomorrow</h3><p>Turn your idea into something real.</p><div class="preview-footer"><span>📍 Mumbai · Online</span><span class="match">92% match</span></div></div></div><div class="floating-card floating-bottom"><span class="float-icon green-icon">✓</span><div><b>Opportunity found!</b><small>Don't miss your next big thing</small></div></div></div></section>
-<section id="categories" class="container section"><div class="section-heading"><div><span class="eyebrow">FIND YOUR NEXT EXPERIENCE</span><h2>Explore by category</h2><p>Whatever you're curious about, there's a place to start.</p></div><a class="text-link" href="events.html">View all events →</a></div><div class="category-grid"><a class="category-card purple-card" href="events.html?category=Hackathon"><span class="category-icon">⌘</span><h3>Hackathon</h3><p>Build, code, solve and compete.</p><b>Explore hackathon →</b></a><a class="category-card orange-card" href="events.html?category=Tech+Talk"><span class="category-icon">◎</span><h3>Tech Talk</h3><p>Hear from people shaping tech.</p><b>Explore tech talk →</b></a><a class="category-card green-card" href="events.html?category=Workshop"><span class="category-icon">✳</span><h3>Workshop</h3><p>Learn by making and doing.</p><b>Explore workshop →</b></a><a class="category-card pink-card" href="events.html?category=Startup"><span class="category-icon">✦</span><h3>Startup</h3><p>Pitch, network and launch ideas.</p><b>Explore startup →</b></a><a class="category-card purple-card" href="events.html?category=Music"><span class="category-icon">♫</span><h3>Music</h3><p>Concerts, jams and open mics.</p><b>Explore music →</b></a><a class="category-card orange-card" href="events.html?category=Sports"><span class="category-icon">⚽</span><h3>Sports</h3><p>Tournaments, runs and matches.</p><b>Explore sports →</b></a><a class="category-card green-card" href="events.html?category=Art"><span class="category-icon">✎</span><h3>Art</h3><p>Exhibitions, design and creativity.</p><b>Explore art →</b></a><a class="category-card pink-card" href="events.html?category=Food"><span class="category-icon">🍽</span><h3>Food</h3><p>Festivals, tastings and cook-offs.</p><b>Explore food →</b></a></div></section>
-<section id="how" class="how-section"><div class="container"><div class="section-heading centered"><div><span class="eyebrow">LESS SEARCHING, MORE DOING</span><h2>Your next opportunity, made personal</h2><p>EventAdda helps bring the right opportunities to you.</p></div></div><div class="steps-grid"><article class="step"><span>01</span><h3>Tell us what you like</h3><p>Choose your interests and preferred city when you create your profile.</p></article><article class="step"><span>02</span><h3>See relevant events first</h3><p>Discover opportunities that match your interests, with recommendations at the top.</p></article><article class="step"><span>03</span><h3>Take your next step</h3><p>Open an event, check its details and follow the organizer's registration link.</p></article></div></div></section>
-<section class="cta container"><div><span class="eyebrow">READY WHEN YOU ARE</span><h2>Your next big opportunity is out there.</h2><p>Make your interests count. Start discovering with EventAdda.</p></div><a class="btn btn-primary btn-large" href="signup.html">Join EventAdda →</a></section></main>
-<footer class="footer"><a class="brand" href="index.html"><span class="brand-icon">E</span> Event<span>Adda</span></a><p>Discover. Connect. Participate.</p><span>© 2026 EventAdda · Student opportunity discovery</span></footer><script src="js/main.js"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EventADDA — Discover your next opportunity</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/extra.css">
+</head>
+<body data-page="landing">
+  <header class="header">
+    <a class="brand" href="index.html">Event<span>ADDA</span></a>
+    <nav>
+      <a href="events.html">Explore</a>
+      <a href="#categories">Categories</a>
+      <a href="#featured">Live Events</a>
+      <a href="#how">How it works</a>
+    </nav>
+    <div class="header-actions">
+      <a class="btn btn-light" href="login.html">Log in</a>
+      <a class="btn btn-primary" href="signup.html">Get started</a>
+    </div>
+    <button class="menu-toggle" aria-label="Open menu">☰</button>
+  </header>
+
+  <main>
+    <section class="hero container">
+      <div class="hero-copy">
+        <div class="hero-eyebrow-pill">
+          <span class="pulse-dot" aria-hidden="true"></span>
+          <span class="eyebrow">CURATED CAMPUS &amp; CITY OPPORTUNITIES</span>
+        </div>
+        <h1>Where ambitious minds<br>find their <em>next big stage.</em></h1>
+        <p>From 36-hour national hackathons and AI engineering labs to founder pitch nights, indie jams, and design sprints — EventADDA curates verified experiences around your interests and city.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary btn-large" href="signup.html">Build my profile <span>→</span></a>
+          <a class="btn btn-light btn-large" href="events.html">Explore events</a>
+        </div>
+        <div class="hero-proof-strip" aria-label="Platform highlights">
+          <div class="hero-proof-item">
+            <strong>8 Tracks</strong>
+            <span>Tech, Startup, Arts &amp; Sports</span>
+          </div>
+          <div class="hero-proof-divider" aria-hidden="true"></div>
+          <div class="hero-proof-item">
+            <strong>Free &amp; ₹</strong>
+            <span>Transparent Entry Tiers</span>
+          </div>
+          <div class="hero-proof-divider" aria-hidden="true"></div>
+          <div class="hero-proof-item">
+            <strong>9+ Cities</strong>
+            <span>In-Person, Hybrid &amp; Online</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-art" aria-label="Featured event discovery preview">
+        <div class="hero-stage-grid" aria-hidden="true"></div>
+
+        <div class="floating-card floating-top">
+          <span class="float-icon">✦</span>
+          <div>
+            <b>Personalized for you</b>
+            <small>Ranked by your interests &amp; city</small>
+          </div>
+        </div>
+
+        <div class="stage-card-back" aria-hidden="true">
+          <div class="stage-back-top">
+            <span class="tag tag-green">WORKSHOP</span>
+            <span class="price-pill price-pill-paid">₹299</span>
+          </div>
+          <h4>Design Systems &amp; Figma Lab</h4>
+          <div class="stage-back-meta">📅 Nov 16 · 📍 Bengaluru · In-person</div>
+        </div>
+
+        <article class="event-preview">
+          <div class="preview-banner">
+            <div class="preview-poster-pattern" aria-hidden="true"></div>
+            <div class="preview-top-row">
+              <div class="poster-date-badge">
+                <span class="month">NOV</span>
+                <span class="day">08</span>
+              </div>
+              <span class="price-pill price-pill-free">FREE ENTRY</span>
+            </div>
+            <div class="banner-symbol" aria-hidden="true">⌘</div>
+            <div class="preview-bottom-row">
+              <span class="poster-mode-chip">⚡ Hybrid · Pune</span>
+              <span class="preview-featured-label">FEATURED OPPORTUNITY</span>
+            </div>
+          </div>
+          <div class="preview-body">
+            <div class="preview-tag-row">
+              <span class="tag tag-purple">HACKATHON</span>
+              <span class="match">✦ 96% interest match</span>
+            </div>
+            <h3>HackPune 36: Build for Bharat</h3>
+            <p>A 36-hour national civic-tech &amp; AI build sprint with mentors, cloud credits, and ₹1,50,000 in prizes.</p>
+            <div class="preview-footer">
+              <div class="preview-host">
+                <span class="organizer-monogram">G</span>
+                <span>Google Developer Group Pune</span>
+              </div>
+              <a class="preview-cta-link" href="events.html?category=Hackathon">Explore →</a>
+            </div>
+          </div>
+        </article>
+
+        <div class="floating-card floating-mid">
+          <span class="float-icon">⌘</span>
+          <div>
+            <b>8 curated tracks</b>
+            <small>Hackathons · Talks · Workshops · Arts</small>
+          </div>
+        </div>
+
+        <div class="floating-card floating-bottom">
+          <span class="float-icon green-icon">✓</span>
+          <div>
+            <b>Verified campus &amp; city hosts</b>
+            <small>Direct registration · Instant schedules</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="categories" class="container section">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">EXPLORE BY TRACK</span>
+          <h2>Eight ways to build, learn, and connect</h2>
+          <p>Whether you want to ship code in a weekend sprint or unwind at an indie open mic, start with a track.</p>
+        </div>
+        <a class="text-link" href="events.html">View all events →</a>
+      </div>
+      <div class="category-grid">
+        <a class="category-card purple-card" href="events.html?category=Hackathon">
+          <div class="category-card-top">
+            <span class="category-icon">⌘</span>
+            <span class="category-index">01</span>
+          </div>
+          <h3>Hackathon</h3>
+          <p>Build, code, solve real-world problems, and compete in high-energy sprints.</p>
+          <b>Explore hackathons →</b>
+        </a>
+        <a class="category-card orange-card" href="events.html?category=Tech+Talk">
+          <div class="category-card-top">
+            <span class="category-icon">◎</span>
+            <span class="category-index">02</span>
+          </div>
+          <h3>Tech Talk</h3>
+          <p>Hear directly from engineers, researchers, and leaders shaping technology.</p>
+          <b>Explore tech talks →</b>
+        </a>
+        <a class="category-card green-card" href="events.html?category=Workshop">
+          <div class="category-card-top">
+            <span class="category-icon">✳</span>
+            <span class="category-index">03</span>
+          </div>
+          <h3>Workshop</h3>
+          <p>Hands-on labs and bootcamps where you learn by making and shipping.</p>
+          <b>Explore workshops →</b>
+        </a>
+        <a class="category-card pink-card" href="events.html?category=Startup">
+          <div class="category-card-top">
+            <span class="category-icon">✦</span>
+            <span class="category-index">04</span>
+          </div>
+          <h3>Startup</h3>
+          <p>Pitch nights, founder mixers, and investor office hours for builders.</p>
+          <b>Explore startup events →</b>
+        </a>
+        <a class="category-card purple-card" href="events.html?category=Music">
+          <div class="category-card-top">
+            <span class="category-icon">♫</span>
+            <span class="category-index">05</span>
+          </div>
+          <h3>Music</h3>
+          <p>Campus acoustic sessions, indie band showcases, and rooftop open mics.</p>
+          <b>Explore music →</b>
+        </a>
+        <a class="category-card orange-card" href="events.html?category=Sports">
+          <div class="category-card-top">
+            <span class="category-icon">⚽</span>
+            <span class="category-index">06</span>
+          </div>
+          <h3>Sports</h3>
+          <p>Inter-college tournaments, floodlit futsal cups, and city sunrise runs.</p>
+          <b>Explore sports →</b>
+        </a>
+        <a class="category-card green-card" href="events.html?category=Art">
+          <div class="category-card-top">
+            <span class="category-icon">✎</span>
+            <span class="category-index">07</span>
+          </div>
+          <h3>Art</h3>
+          <p>Design exhibitions, heritage sketch walks, and creative installations.</p>
+          <b>Explore art &amp; design →</b>
+        </a>
+        <a class="category-card pink-card" href="events.html?category=Food">
+          <div class="category-card-top">
+            <span class="category-icon">🍽</span>
+            <span class="category-index">08</span>
+          </div>
+          <h3>Food</h3>
+          <p>Culinary pop-ups, specialty coffee tastings, and student cook-offs.</p>
+          <b>Explore food &amp; meetups →</b>
+        </a>
+      </div>
+    </section>
+
+    <section id="featured" class="container section landing-featured-section">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">LIVE FROM THE CATALOGUE</span>
+          <h2>Upcoming opportunities worth showing up for</h2>
+          <p>Published events happening across campuses, cities, and online — updated live from EventADDA organizers.</p>
+        </div>
+        <a class="text-link" href="events.html">Browse full directory →</a>
+      </div>
+      <div id="landingEventGrid" class="event-grid"></div>
+      <div class="landing-featured-footer">
+        <a class="btn btn-light btn-large" href="events.html">Explore all upcoming events →</a>
+      </div>
+    </section>
+
+    <section id="how" class="how-section">
+      <div class="container">
+        <div class="section-heading centered">
+          <div>
+            <span class="eyebrow">LESS SEARCHING, MORE DOING</span>
+            <h2>Your next opportunity, made personal</h2>
+            <p>EventADDA brings high-signal opportunities to you — whether you are participating or organizing.</p>
+          </div>
+        </div>
+        <div class="steps-grid">
+          <article class="step">
+            <div class="step-header">
+              <span class="step-num">01</span>
+              <span class="step-tag">2-minute setup</span>
+            </div>
+            <h3>Tell us what drives you</h3>
+            <p>Select your favorite tracks and preferred city when you create your participant profile.</p>
+          </article>
+          <article class="step">
+            <div class="step-header">
+              <span class="step-num">02</span>
+              <span class="step-tag">Smart ranking</span>
+            </div>
+            <h3>See relevant events first</h3>
+            <p>Opportunities matching your interests and city rise to the top with clear Free or INR pricing.</p>
+          </article>
+          <article class="step">
+            <div class="step-header">
+              <span class="step-num">03</span>
+              <span class="step-tag">Direct access</span>
+            </div>
+            <h3>Show up and participate</h3>
+            <p>Inspect full schedules, venue details, and register directly via the organizer's official link.</p>
+          </article>
+        </div>
+        <div class="role-callout-bar">
+          <div class="role-callout-copy">
+            <strong>Hosting a hackathon, workshop, or campus festival?</strong>
+            <span>Publish your event with custom Free/Paid pricing and reach students across cities in minutes.</span>
+          </div>
+          <a class="btn btn-light" href="signup-organizer.html">Create organizer account →</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta container">
+      <div class="cta-copy">
+        <span class="eyebrow">READY WHEN YOU ARE</span>
+        <h2>Your next big opportunity is already on the calendar.</h2>
+        <p>Create your profile in under two minutes and start discovering with EventADDA.</p>
+      </div>
+      <div class="cta-actions">
+        <a class="btn btn-primary btn-large" href="signup.html">Join EventADDA →</a>
+        <a class="btn btn-light btn-large" href="events.html">Browse events</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <a class="brand" href="index.html">Event<span>ADDA</span></a>
+    <p>Discover. Connect. Participate.</p>
+    <span>© 2026 EventADDA · Student &amp; city opportunity discovery</span>
+  </footer>
+  <script src="js/main.js"></script>
+</body>
+</html>

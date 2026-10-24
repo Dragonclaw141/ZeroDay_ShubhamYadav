@@ -3,8 +3,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    MONGODB_URL: str = "mongodb://localhost:27017"
-    DATABASE_NAME: str = "eventadda"
+    MONGODB_URL: str = "mongodb://127.0.0.1:27017"
+    DATABASE_NAME: str = "eventadda_db"
     JWT_SECRET_KEY: str = "change-this-secret-key-in-development"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY_HOURS: int = 24
@@ -32,6 +32,8 @@ class Settings(BaseSettings):
             "http://127.0.0.1:5500",
             "http://localhost:8080",
             "http://127.0.0.1:8080",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
         }
         if self.FRONTEND_URL:
             for origin in self.FRONTEND_URL.split(","):

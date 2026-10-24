@@ -24,6 +24,18 @@ class FakeUpdateResult:
         self.modified_count = modified_count
 
 
+class FakeCursor:
+    """Async cursor returned by FakeCollection.find() supporting Motor's to_list()."""
+
+    def __init__(self, docs: list[dict[str, Any]]):
+        self._docs = docs
+
+    async def to_list(self, length: Optional[int] = None) -> list[dict[str, Any]]:
+        if length is None:
+            return copy.deepcopy(self._docs)
+        return copy.deepcopy(self._docs[:length])
+
+
 class FakeCollection:
     """Isolated async in-memory collection implementing Motor collection methods for testing."""
 
@@ -102,6 +114,19 @@ class FakeCollection:
             if self._matches(doc, query, collation=collation):
                 return copy.deepcopy(doc)
         return None
+
+    def find(
+        self,
+        query: Optional[dict[str, Any]] = None,
+    ) -> FakeCursor:
+        self._check_fail()
+        q = query or {}
+        matched = [
+            copy.deepcopy(doc)
+            for doc in self._docs
+            if self._matches(doc, q)
+        ]
+        return FakeCursor(matched)
 
     async def insert_one(self, doc: dict[str, Any]) -> FakeInsertOneResult:
         self._check_fail()

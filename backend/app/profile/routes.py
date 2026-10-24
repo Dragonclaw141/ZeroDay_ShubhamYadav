@@ -57,7 +57,13 @@ async def update_profile(
             )
         update_fields["phone"] = payload.phone
 
-    if payload.interests is not None:
+    if payload.affiliation_details is not None and current_user.get("role") == "participant":
+        update_fields["affiliation_details"] = payload.affiliation_details
+
+    if payload.organization_name is not None and current_user.get("role") == "organizer":
+        update_fields["organization_name"] = payload.organization_name
+
+    if payload.interests is not None and current_user.get("role") == "participant":
         update_fields["interests"] = payload.interests
 
     if payload.location is not None:

@@ -33,7 +33,35 @@ cd frontend
 ```
 Open `http://localhost:5500` in your browser.
 
-### 3. Run Automated Tests
+### 3. Seed Demo Data (Optional — For Local Demo & Testing)
+To populate `eventadda_db` with 6 demo organizer accounts, 1 demo participant account, and 34 realistic published events across all 8 UI categories (without wiping existing collections or modifying real user records):
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts\seed_demo_data.py
+```
+
+The seed script is idempotent and safe to run multiple times. To refresh relative future event dates on existing demo events, pass `--refresh-dates`:
+
+```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts\seed_demo_data.py --refresh-dates
+```
+
+#### Local Demo Login Credentials
+> **Note:** These are local-only development/demo credentials seeded by `scripts/seed_demo_data.py` (overridable via `EVENTADDA_DEMO_PASSWORD`). Never use them in production.
+
+| Role | Email | Password | Organization / Affiliation |
+| :--- | :--- | :--- | :--- |
+| **Participant** | `participant@demo.eventadda.in` | `DemoPass2026` | COEP Technological University / Computer Engineering |
+| **Organizer** | `gdg.pune@demo.eventadda.in` | `DemoPass2026` | Google Developer Group Pune |
+| **Organizer** | `ecell.iitb@demo.eventadda.in` | `DemoPass2026` | E-Cell IIT Bombay |
+| **Organizer** | `makers.blr@demo.eventadda.in` | `DemoPass2026` | Bengaluru Makers Collective |
+| **Organizer** | `sound.delhi@demo.eventadda.in` | `DemoPass2026` | Delhi Sound Society |
+| **Organizer** | `sports.hyd@demo.eventadda.in` | `DemoPass2026` | Hyderabad Campus Sports League |
+| **Organizer** | `food.mumbai@demo.eventadda.in` | `DemoPass2026` | Mumbai Food & Culture Collective |
+
+### 4. Run Automated Tests
 ```powershell
 cd backend
 .\.venv\Scripts\python.exe -m pytest -v

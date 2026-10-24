@@ -11,6 +11,8 @@ class ProfileUpdateRequest(BaseModel):
 
     full_name: Optional[str] = Field(default=None, min_length=2, max_length=100)
     phone: Optional[str] = Field(default=None, min_length=10, max_length=20)
+    affiliation_details: Optional[str] = Field(default=None, max_length=150)
+    organization_name: Optional[str] = Field(default=None, max_length=150)
     interests: Optional[list[str]] = None
     location: Optional[UserLocation] = None
 
@@ -30,6 +32,14 @@ class ProfileUpdateRequest(BaseModel):
         if value is None:
             return None
         return normalize_phone(value)
+
+    @field_validator("affiliation_details", "organization_name")
+    @classmethod
+    def strip_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned if cleaned else None
 
     @field_validator("interests")
     @classmethod

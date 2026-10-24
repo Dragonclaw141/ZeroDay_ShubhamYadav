@@ -75,6 +75,8 @@ class SignupRequest(BaseModel):
     phone: str = Field(..., min_length=10, max_length=20)
     password: str = Field(..., min_length=8, max_length=72)
     role: RoleLiteral
+    affiliation_details: Optional[str] = Field(default=None, max_length=150)
+    organization_name: Optional[str] = Field(default=None, max_length=150)
 
     @field_validator("full_name")
     @classmethod
@@ -103,6 +105,14 @@ class SignupRequest(BaseModel):
             raise ValueError("Password must contain at least one letter and one number.")
         return value
 
+    @field_validator("affiliation_details", "organization_name")
+    @classmethod
+    def strip_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned if cleaned else None
+
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -120,6 +130,8 @@ class UserResponse(BaseModel):
     email: str
     phone: str
     role: RoleLiteral
+    affiliation_details: Optional[str] = None
+    organization_name: Optional[str] = None
     interests: list[str] = Field(default_factory=list)
     location: Optional[UserLocation] = None
     onboarding_completed: bool = False
@@ -146,6 +158,8 @@ def serialize_user(user_doc: dict[str, Any]) -> UserResponse:
         email=user_doc["email"],
         phone=user_doc["phone"],
         role=user_doc["role"],
+        affiliation_details=user_doc.get("affiliation_details"),
+        organization_name=user_doc.get("organization_name"),
         interests=list(user_doc.get("interests") or []),
         location=location_obj,
         onboarding_completed=bool(user_doc.get("onboarding_completed", False)),

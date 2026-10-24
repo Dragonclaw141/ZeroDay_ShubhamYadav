@@ -1,4 +1,4 @@
-# EventAdda Frontend
+# EventADDA Frontend
 
 Responsive HTML/CSS + vanilla JavaScript frontend integrated with the FastAPI backend.
 

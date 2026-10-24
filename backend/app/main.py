@@ -16,15 +16,16 @@ from app.core.database import (
     connect_to_mongo,
     get_database,
 )
+from app.events.routes import router as events_router
 from app.onboarding.routes import router as onboarding_router
 from app.profile.routes import router as profile_router
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    await connect_to_mongo()
+    await connect_to_mongo(_app)
     yield
-    await close_mongo_connection()
+    await close_mongo_connection(_app)
 
 
 app = FastAPI(
@@ -91,3 +92,4 @@ async def health_check(
 app.include_router(auth_router)
 app.include_router(onboarding_router)
 app.include_router(profile_router)
+app.include_router(events_router)
