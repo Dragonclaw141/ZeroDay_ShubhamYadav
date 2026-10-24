@@ -1,0 +1,18 @@
+/* Rules for the dashboard / detail elements added with the new features. */
+.auth-card textarea{width:100%;padding:12px 14px;border:1px solid #e5e2ee;border-radius:11px;background:#fff;color:var(--ink);font:14px 'DM Sans',sans-serif;outline:none;resize:vertical;transition:border-color .25s,box-shadow .25s}
+.auth-card textarea:hover{border-color:#cfc6f5}
+.auth-card textarea:focus{border-color:#8f78ff;box-shadow:0 0 0 4px rgba(109,74,255,.12)}
+.stack{display:grid;gap:10px;margin-top:22px}
+.event-card-body .stack{margin-top:0}
+.pre{white-space:pre-line}
+#cancelWrap .btn{margin-top:12px}
+.dash-section{margin-top:60px}
+.btn[disabled]{opacity:.6;cursor:not-allowed;transform:none!important}
+.profile-panel{margin:24px 0 32px}
+.profile-panel .auth-card{width:100%;max-width:100%;padding:26px 28px}
+.profile-header{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.profile-summary{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:13px;color:var(--muted)}
+.status-banner{background:#f4f0ff;border:1px solid #dfd6ff;color:#4a32b8;border-radius:12px;padding:13px 16px;font-size:13px;margin:18px 0 22px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.status-banner.warn{background:#fff8e8;border-color:#f6e7bd;color:#8b6817}
+.status-banner.error{background:#fff0f0;border-color:#f5c2c2;color:#a63232}
+.inline-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}

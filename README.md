@@ -1,37 +1,40 @@
 # EventAdda
-<<<<<<< HEAD
 
 **Hyperlocal Event Discovery & Community Engagement Platform**
 
 EventAdda centralizes discovery for hackathons, workshops, summits/conferences, and meetups with personalized location-aware recommendations and direct in-app registration.
 
 ## Tech Stack
-- **Frontend:** React
-- **Backend:** Python (FastAPI)
-- **Database:** MongoDB (Motor async driver)
+- **Frontend:** Responsive HTML5, CSS3, and Vanilla JavaScript (`frontend/`)
+- **Backend:** Python with FastAPI (`backend/`)
+- **Database:** MongoDB with Motor async driver
 
 ## Project Structure
-- `backend/` — FastAPI application, MongoDB models/services, seed scripts, and test suite.
-- `frontend/` — React frontend application.
-- `docs/` — Shared API contracts, decisions register, and mock payloads.
-- `Part_a Implementation Plan.pdf` — Requirements and planning reference.
+- `backend/` — FastAPI application, Pydantic schemas, JWT authentication, onboarding, profile endpoints, and `pytest` suite.
+- `frontend/` — Static HTML/CSS/JS frontend integrated with Stage 1 backend endpoints.
+- `docs/` — Shared API contract (`docs/api_contract.md`) and decisions register (`docs/decisions.md`).
+- `Part_a Implementation Plan.pdf` & `Part_b Implementation Plan.pdf` — Requirements and architecture reference documents.
 
-## Backend Setup
+## Running Locally
 
-1. Create and activate the virtual environment:
-   ```powershell
-   cd backend
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
-2. Install dependencies:
-   ```powershell
-   pip install -r requirements.txt
-   ```
-3. Configure environment variables:
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-=======
-Hyperlocal Event Discovery &amp; Community Engagement platform built for the VecnaVerse National Level Hackathon. Helping users discover nearby events based on location and interests while enabling organizers to promote events and engage their communities.
->>>>>>> e78d89b8ce43df62ffab687b4ac5babe8d9f7ef4
+### 1. Start the Backend (`http://localhost:8000`)
+```powershell
+cd backend
+Copy-Item .env.example .env
+# Ensure MONGODB_URL in .env points to a running local MongoDB or MongoDB Atlas cluster
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 2. Serve the Frontend (`http://localhost:5500`)
+In a separate terminal:
+```powershell
+cd frontend
+..\backend\.venv\Scripts\python.exe -m http.server 5500
+```
+Open `http://localhost:5500` in your browser.
+
+### 3. Run Automated Tests
+```powershell
+cd backend
+.\.venv\Scripts\python.exe -m pytest -v
+```

@@ -1,1 +1,84 @@
-﻿# Placeholder: backend/app/core/database.py
+import logging
+from typing import Optional
+
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from pymongo import ASCENDING
+from pymongo.collation import Collation
+
+from app.config import settings
+
+logger = logging.getLogger(__name__)
+
+_client: Optional[AsyncIOMotorClient] = None
+_database: Optional[AsyncIOMotorDatabase] = None
+
+
+async def connect_to_mongo() -> None:
+    """Initialize Motor client and ensure Stage 1 indexes safely."""
+    global _client, _database
+    if _client is None:
+        _client = AsyncIOMotorClient(
+            settings.MONGODB_URL,
+            serverSelectionTimeoutMS=3000,
+        )
+        _database = _client[settings.DATABASE_NAME]
+
+    try:
+        await ensure_indexes(_database)
+    except Exception as exc:
+        logger.warning(
+            "Database index initialization deferred (MongoDB not yet reachable): %s",
+            type(exc).__name__,
+        )
+
+
+async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
+    """Create required Stage 1 indexes idempotently on the users collection."""
+    users = db["users"]
+    await users.create_index(
+        [("email", ASCENDING)],
+        name="idx_email_unique",
+        unique=True,
+        collation=Collation(locale="en", strength=2),
+    )
+    await users.create_index(
+        [("phone", ASCENDING)],
+        name="idx_phone_unique",
+        unique=True,
+    )
+    await users.create_index(
+        [("location.coordinates", "2dsphere")],
+        name="idx_location_geo",
+        sparse=True,
+    )
+
+
+async def close_mongo_connection() -> None:
+    """Close Motor client connection cleanly."""
+    global _client, _database
+    if _client is not None:
+        _client.close()
+        _client = None
+        _database = None
+
+
+def get_database() -> AsyncIOMotorDatabase:
+    """FastAPI dependency returning the active database handle."""
+    global _client, _database
+    if _database is None:
+        _client = AsyncIOMotorClient(
+            settings.MONGODB_URL,
+            serverSelectionTimeoutMS=3000,
+        )
+        _database = _client[settings.DATABASE_NAME]
+    return _database
+
+
+async def check_database_health(db: Optional[AsyncIOMotorDatabase] = None) -> bool:
+    """Ping MongoDB to verify database connectivity without exposing credentials."""
+    target_db = db if db is not None else get_database()
+    try:
+        result = await target_db.command("ping")
+        return bool(result and result.get("ok") == 1.0)
+    except Exception:
+        return False
