@@ -374,6 +374,37 @@ Run the tests after changing business logic, particularly around registration el
 
 ---
 
+### Razorpay Payments
+
+EventAdda integrates Razorpay to support secure payment processing for paid event registrations.
+
+Participants can use Razorpay Checkout to select an available payment method. For the best experience when exploring the payment flow locally, **we recommend using Netbanking in Razorpay Test Mode**.
+
+#### Recommended Payment Flow
+
+1. Open a paid event and proceed with registration.
+2. Continue to the Razorpay Checkout window.
+3. Select **Netbanking** from the available payment options.
+4. Choose any available bank displayed by Razorpay.
+5. On the simulated bank page, select **Success** or **Failure** to test the corresponding payment outcome.
+
+Razorpay Test Mode provides a simulated payment experience, so you can explore the payment workflow without making a real bank transaction.
+
+#### Configuration
+
+To enable payment testing:
+
+- Configure your Razorpay Test Mode API credentials in `backend/.env`.
+- Keep the Razorpay secret key exclusively on the backend.
+- Ensure the backend can connect to the Razorpay API.
+- Restart the backend after changing environment variables.
+
+EventAdda uses backend-created payment orders and server-side payment verification. Payment outcomes are processed through the existing registration and payment workflows.
+
+**Note:** Netbanking is the recommended method for the local demonstration, but the available payment methods and banks are determined by Razorpay Checkout. The exact options displayed may vary.
+
+Use Razorpay's official documentation for further configuration details: https://razorpay.com/docs/payments/payment-gateway/test-mode/
+
 ## Project Principles
 
 EventAdda is built around a few core principles:
