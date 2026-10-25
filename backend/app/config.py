@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASS: str = ""
     FRONTEND_URL: str = "http://localhost:5173"
+    RAZORPAY_KEY_ID: str = "rzp_test_local_eventadda"
+    RAZORPAY_KEY_SECRET: str = "rzp_test_secret_local_eventadda"
+    RAZORPAY_API_BASE_URL: str = "https://api.razorpay.com/v1"
+    REMINDER_SCHEDULER_ENABLED: bool = True
+    REMINDER_POLL_INTERVAL_SECONDS: int = 30
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parent.parent / ".env"),

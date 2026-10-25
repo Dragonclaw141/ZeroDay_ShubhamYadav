@@ -9,6 +9,11 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 from pymongo import ReturnDocument
 
 from app.events.recommendations import rank_recommended_events
+from app.registrations.service import (
+    expire_stale_reservations,
+    reconcile_bookings_for_cancelled_event,
+    serialize_registration,
+)
 from app.events.schemas import (
     CATEGORY_DISPLAY_NAMES,
     CategoryEventListResponse,
@@ -228,7 +233,9 @@ async def update_organizer_event(
         update_fields["is_free"] = resolved_is_free
 
     if payload.max_capacity is not None:
-        current_registered = int(event_doc.get("registered_count", 0))
+        await expire_stale_reservations(db, event_id=event_doc["_id"])
+        refreshed_for_cap = await db["events"].find_one({"_id": event_doc["_id"]})
+        current_registered = int((refreshed_for_cap or event_doc).get("registered_count", 0))
         if payload.max_capacity < current_registered:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -333,15 +340,21 @@ async def cancel_organizer_event(
         )
 
     now = datetime.now(timezone.utc)
-    updated_doc = await db["events"].find_one_and_update(
+    await db["events"].find_one_and_update(
         {"_id": event_doc["_id"]},
         {"$set": {"status": "cancelled", "updated_at": now}},
         return_document=ReturnDocument.AFTER,
     )
+    suppressed_count = await reconcile_bookings_for_cancelled_event(
+        db,
+        event_doc["_id"],
+        now=now,
+    )
+    updated_doc = await db["events"].find_one({"_id": event_doc["_id"]})
     return EventCancelResponse(
         message="Event cancelled successfully",
         event=serialize_event(updated_doc, is_registered=False),
-        notifications_sent=0,
+        notifications_sent=suppressed_count,
     )
 
 
@@ -539,8 +552,41 @@ async def get_event_details(
             detail="Event not found",
         )
 
-    is_reg = False if current_user is not None else None
-    return serialize_event(event_doc, is_registered=is_reg)
+    await expire_stale_reservations(db, event_id=event_oid)
+    event_doc = await db["events"].find_one({"_id": event_oid}) or event_doc
+
+    is_reg: Optional[bool] = False if current_user is not None else None
+    my_reg_payload: Optional[dict[str, Any]] = None
+
+    if current_user is not None and current_user.get("role") == "participant":
+        participant_oid = current_user["_id"]
+        active_slot_key = f"{participant_oid}:{event_oid}"
+        reg_doc = await db["registrations"].find_one({"active_slot_key": active_slot_key})
+        if not reg_doc:
+            reg_cursor = db["registrations"].find(
+                {"participant_id": participant_oid, "event_id": event_oid}
+            )
+            reg_history = await reg_cursor.to_list(length=20)
+            if reg_history:
+                reg_history.sort(
+                    key=lambda d: ensure_utc_datetime(d["created_at"]),
+                    reverse=True,
+                )
+                reg_doc = reg_history[0]
+        if reg_doc:
+            is_reg = bool(reg_doc.get("status") == "confirmed")
+            serialized_reg = await serialize_registration(
+                db,
+                reg_doc,
+                event_doc=event_doc,
+            )
+            my_reg_payload = serialized_reg.model_dump(mode="json")
+
+    return serialize_event(
+        event_doc,
+        is_registered=is_reg,
+        my_registration=my_reg_payload,
+    )
 
 
 async def get_participant_recommendations(

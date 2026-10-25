@@ -17,14 +17,22 @@ from app.core.database import (
     get_database,
 )
 from app.events.routes import router as events_router
+from app.notifications.routes import router as notifications_router
+from app.notifications.service import (
+    start_notification_scheduler,
+    stop_notification_scheduler,
+)
 from app.onboarding.routes import router as onboarding_router
 from app.profile.routes import router as profile_router
+from app.registrations.routes import router as registrations_router
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     await connect_to_mongo(_app)
+    await start_notification_scheduler(_app)
     yield
+    await stop_notification_scheduler(_app)
     await close_mongo_connection(_app)
 
 
@@ -93,3 +101,5 @@ app.include_router(auth_router)
 app.include_router(onboarding_router)
 app.include_router(profile_router)
 app.include_router(events_router)
+app.include_router(registrations_router)
+app.include_router(notifications_router)

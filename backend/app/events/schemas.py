@@ -320,6 +320,7 @@ class EventResponse(BaseModel):
     organizer_name: str
     organizer: EventOrganizerInfo
     is_registered: Optional[bool] = None
+    my_registration: Optional[dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -379,6 +380,7 @@ def serialize_event(
     event_doc: dict[str, Any],
     *,
     is_registered: Optional[bool] = None,
+    my_registration: Optional[dict[str, Any]] = None,
 ) -> EventResponse:
     """Convert a MongoDB event document into a complete EventResponse."""
     now = datetime.now(timezone.utc)
@@ -440,6 +442,7 @@ def serialize_event(
             organization_name=organizer_org,
         ),
         is_registered=is_registered,
+        my_registration=my_registration,
         created_at=ensure_utc_datetime(event_doc["created_at"]),
         updated_at=ensure_utc_datetime(event_doc.get("updated_at") or event_doc["created_at"]),
     )

@@ -25,10 +25,20 @@ class FakeUpdateResult:
 
 
 class FakeCursor:
-    """Async cursor returned by FakeCollection.find() supporting Motor's to_list()."""
+    """Async cursor returned by FakeCollection.find() supporting Motor's sort() and to_list()."""
 
     def __init__(self, docs: list[dict[str, Any]]):
         self._docs = docs
+
+    def sort(self, key_or_list: Any, direction: int = 1) -> "FakeCursor":
+        if isinstance(key_or_list, str):
+            specs = [(key_or_list, direction)]
+        else:
+            specs = list(key_or_list)
+        for field, dir_val in reversed(specs):
+            reverse = dir_val < 0
+            self._docs.sort(key=lambda d: (d.get(field) is None, d.get(field)), reverse=reverse)
+        return self
 
     async def to_list(self, length: Optional[int] = None) -> list[dict[str, Any]]:
         if length is None:
@@ -49,11 +59,20 @@ class FakeCollection:
         if self.fail_operations:
             raise ServerSelectionTimeoutError("Simulated database failure")
 
-    async def create_index(self, keys: list[tuple[str, Any]], **kwargs: Any) -> str:
+    async def create_index(self, keys: Any, **kwargs: Any) -> str:
         self._check_fail()
-        idx_name = kwargs.get("name") or "_".join(f"{k}_{v}" for k, v in keys)
-        self.indexes[idx_name] = {"keys": keys, **kwargs}
+        if isinstance(keys, str):
+            norm_keys = [(keys, 1)]
+        else:
+            norm_keys = list(keys)
+        idx_name = kwargs.get("name") or "_".join(f"{k}_{v}" for k, v in norm_keys)
+        self.indexes[idx_name] = {"keys": norm_keys, **kwargs}
         return idx_name
+
+    def _resolve_expr_operand(self, doc: dict[str, Any], operand: Any) -> Any:
+        if isinstance(operand, str) and operand.startswith("$"):
+            return doc.get(operand[1:], 0)
+        return operand
 
     def _matches(
         self,
@@ -65,10 +84,42 @@ class FakeCollection:
             collation and getattr(collation, "document", {}).get("strength") == 2
         )
         for key, condition in query.items():
+            if key == "$or":
+                if not any(self._matches(doc, sub, collation=collation) for sub in condition):
+                    return False
+                continue
+            if key == "$and":
+                if not all(self._matches(doc, sub, collation=collation) for sub in condition):
+                    return False
+                continue
+            if key == "$expr":
+                if "$lt" in condition:
+                    lhs, rhs = condition["$lt"]
+                    if not (self._resolve_expr_operand(doc, lhs) < self._resolve_expr_operand(doc, rhs)):
+                        return False
+                continue
+
             val = doc.get(key)
             if isinstance(condition, dict):
-                if "$ne" in condition and val == condition["$ne"]:
-                    return False
+                for op, target in condition.items():
+                    if op == "$ne" and val == target:
+                        return False
+                    elif op == "$in" and val not in target:
+                        return False
+                    elif op == "$nin" and val in target:
+                        return False
+                    elif op == "$gt" and (val is None or not (val > target)):
+                        return False
+                    elif op == "$gte" and (val is None or not (val >= target)):
+                        return False
+                    elif op == "$lt" and (val is None or not (val < target)):
+                        return False
+                    elif op == "$lte" and (val is None or not (val <= target)):
+                        return False
+                    elif op == "$exists":
+                        exists = key in doc
+                        if bool(target) != exists:
+                            return False
             else:
                 if case_insensitive and isinstance(val, str) and isinstance(condition, str):
                     if val.lower() != condition.lower():
@@ -86,23 +137,51 @@ class FakeCollection:
             if not idx_meta.get("unique"):
                 continue
             keys = idx_meta["keys"]
+            sparse = bool(idx_meta.get("sparse"))
             collation = idx_meta.get("collation")
             case_insensitive = bool(
                 collation and getattr(collation, "document", {}).get("strength") == 2
             )
-            for field, _ in keys:
-                cand_val = candidate.get(field)
-                if cand_val is None:
+
+            # For sparse indexes, skip if any indexed field is missing or None
+            if sparse and any(candidate.get(f) is None for f, _ in keys):
+                continue
+            if not sparse and all(candidate.get(f) is None for f, _ in keys):
+                continue
+
+            for existing in self._docs:
+                if ignore_id is not None and existing.get("_id") == ignore_id:
                     continue
-                for existing in self._docs:
-                    if ignore_id is not None and existing.get("_id") == ignore_id:
-                        continue
+                if sparse and any(existing.get(f) is None for f, _ in keys):
+                    continue
+                all_match = True
+                for field, _ in keys:
+                    cand_val = candidate.get(field)
                     ex_val = existing.get(field)
                     if case_insensitive and isinstance(cand_val, str) and isinstance(ex_val, str):
-                        if cand_val.lower() == ex_val.lower():
-                            raise DuplicateKeyError(f"E11000 duplicate key error index: {idx_name} ({field})")
-                    elif cand_val == ex_val:
-                        raise DuplicateKeyError(f"E11000 duplicate key error index: {idx_name} ({field})")
+                        if cand_val.lower() != ex_val.lower():
+                            all_match = False
+                            break
+                    elif cand_val != ex_val:
+                        all_match = False
+                        break
+                if all_match:
+                    field_names = ", ".join(f for f, _ in keys)
+                    raise DuplicateKeyError(
+                        f"E11000 duplicate key error index: {idx_name} ({field_names})"
+                    )
+
+    def _apply_update_ops(self, doc: dict[str, Any], update: dict[str, Any]) -> dict[str, Any]:
+        updated = copy.deepcopy(doc)
+        if "$set" in update:
+            updated.update(copy.deepcopy(update["$set"]))
+        if "$inc" in update:
+            for k, delta in update["$inc"].items():
+                updated[k] = updated.get(k, 0) + delta
+        if "$unset" in update:
+            for k in update["$unset"]:
+                updated.pop(k, None)
+        return updated
 
     async def find_one(
         self,
@@ -145,13 +224,26 @@ class FakeCollection:
         self._check_fail()
         for idx, doc in enumerate(self._docs):
             if self._matches(doc, query):
-                updated = copy.deepcopy(doc)
-                if "$set" in update:
-                    updated.update(copy.deepcopy(update["$set"]))
+                updated = self._apply_update_ops(doc, update)
                 self._enforce_unique_indexes(updated, ignore_id=doc["_id"])
                 self._docs[idx] = updated
                 return FakeUpdateResult(matched_count=1, modified_count=1)
         return FakeUpdateResult(matched_count=0, modified_count=0)
+
+    async def update_many(
+        self,
+        query: dict[str, Any],
+        update: dict[str, Any],
+    ) -> FakeUpdateResult:
+        self._check_fail()
+        matched = 0
+        for idx, doc in enumerate(list(self._docs)):
+            if self._matches(doc, query):
+                updated = self._apply_update_ops(doc, update)
+                self._enforce_unique_indexes(updated, ignore_id=doc["_id"])
+                self._docs[idx] = updated
+                matched += 1
+        return FakeUpdateResult(matched_count=matched, modified_count=matched)
 
     async def find_one_and_update(
         self,
@@ -163,9 +255,7 @@ class FakeCollection:
         for idx, doc in enumerate(self._docs):
             if self._matches(doc, query):
                 before_doc = copy.deepcopy(doc)
-                updated = copy.deepcopy(doc)
-                if "$set" in update:
-                    updated.update(copy.deepcopy(update["$set"]))
+                updated = self._apply_update_ops(doc, update)
                 self._enforce_unique_indexes(updated, ignore_id=doc["_id"])
                 self._docs[idx] = updated
                 if return_document == ReturnDocument.AFTER:

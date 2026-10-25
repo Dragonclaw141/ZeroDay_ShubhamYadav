@@ -39,7 +39,7 @@ async def connect_to_mongo(app: Optional[Any] = None) -> None:
 
 
 async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
-    """Create required Stage 1 indexes idempotently on the users collection."""
+    """Create required indexes idempotently across users, registrations, payments, and notifications."""
     users = db["users"]
     try:
         await users.create_index(
@@ -61,6 +61,53 @@ async def ensure_indexes(db: AsyncIOMotorDatabase) -> None:
         [("location.coordinates", "2dsphere")],
         name="idx_location_geo",
         sparse=True,
+    )
+
+    registrations = db["registrations"]
+    await registrations.create_index(
+        [("active_slot_key", ASCENDING)],
+        name="idx_reg_active_slot_unique",
+        unique=True,
+        sparse=True,
+    )
+    await registrations.create_index(
+        [("participant_id", ASCENDING), ("created_at", ASCENDING)],
+        name="idx_reg_participant_created",
+    )
+    await registrations.create_index(
+        [("event_id", ASCENDING), ("status", ASCENDING), ("reservation_expires_at", ASCENDING)],
+        name="idx_reg_event_status",
+    )
+
+    payments = db["payments"]
+    await payments.create_index(
+        [("razorpay_order_id", ASCENDING)],
+        name="idx_pay_order_id_unique",
+        unique=True,
+        sparse=True,
+    )
+    await payments.create_index(
+        [("razorpay_payment_id", ASCENDING)],
+        name="idx_pay_payment_id_unique",
+        unique=True,
+        sparse=True,
+    )
+    await payments.create_index(
+        [("registration_id", ASCENDING), ("attempt_number", ASCENDING)],
+        name="idx_pay_reg_attempt_unique",
+        unique=True,
+    )
+
+    notifications = db["notifications"]
+    await notifications.create_index(
+        [("dedupe_key", ASCENDING)],
+        name="idx_notif_dedupe_unique",
+        unique=True,
+        sparse=True,
+    )
+    await notifications.create_index(
+        [("status", ASCENDING), ("scheduled_at", ASCENDING), ("next_retry_at", ASCENDING)],
+        name="idx_notif_due_jobs",
     )
 
 

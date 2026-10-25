@@ -773,3 +773,74 @@ async def test_demo_seed_script_idempotency_and_discovery_coverage(
         cat_res = await client.get("/api/events", params={"category": ui_category, "limit": 50})
         assert cat_res.status_code == 200
         assert 4 <= cat_res.json()["total"] <= 5, f"Category {ui_category} count out of range"
+
+
+async def test_create_and_update_event_without_registration_url_and_in_app_booking(
+    client: AsyncClient,
+):
+    """Verify events can be created/edited without registration_url and support in-app booking."""
+    org_token, _ = await _create_organizer(client)
+    part_token, _ = await _create_participant(client)
+    h_org = {"Authorization": f"Bearer {org_token}"}
+    h_part = {"Authorization": f"Bearer {part_token}"}
+
+    # 1. Create a free event omitting registration_url entirely
+    free_payload = _sample_event_payload(title="In-App Free Event", status="published")
+    free_payload["price_type"] = "free"
+    free_payload.pop("registration_url", None)
+
+    res_free = await client.post("/api/organizer/events", json=free_payload, headers=h_org)
+    assert res_free.status_code == 201
+    free_ev = res_free.json()["event"]
+    assert free_ev["registration_url"] is None
+
+    # 2. Create a paid event omitting registration_url entirely
+    paid_payload = _sample_event_payload(title="In-App Paid Event", status="published")
+    paid_payload.pop("is_free", None)
+    paid_payload["price_type"] = "paid"
+    paid_payload["price_amount"] = 350.0
+    paid_payload.pop("registration_url", None)
+
+    res_paid = await client.post("/api/organizer/events", json=paid_payload, headers=h_org)
+    assert res_paid.status_code == 201
+    paid_ev = res_paid.json()["event"]
+    assert paid_ev["registration_url"] is None
+
+    # 3. Update the event without registration_url
+    upd_res = await client.put(
+        f"/api/organizer/events/{free_ev['id']}",
+        json={"title": "Updated In-App Free Event"},
+        headers=h_org,
+    )
+    assert upd_res.status_code == 200
+    assert upd_res.json()["event"]["title"] == "Updated In-App Free Event"
+    assert upd_res.json()["event"]["registration_url"] is None
+
+    # 4. Backward compatibility: update an event that had an external URL, omitting it in update
+    legacy_payload = _sample_event_payload(title="Legacy External Event", status="published")
+    legacy_payload["registration_url"] = "https://forms.gle/sampleLegacyForm"
+    res_legacy = await client.post("/api/organizer/events", json=legacy_payload, headers=h_org)
+    assert res_legacy.status_code == 201
+    legacy_id = res_legacy.json()["event"]["id"]
+    assert res_legacy.json()["event"]["registration_url"] == "https://forms.gle/sampleLegacyForm"
+
+    # Edit legacy event title without supplying registration_url -> preserved
+    edit_legacy = await client.put(
+        f"/api/organizer/events/{legacy_id}",
+        json={"title": "Updated Legacy Title"},
+        headers=h_org,
+    )
+    assert edit_legacy.status_code == 200
+    assert edit_legacy.json()["event"]["registration_url"] == "https://forms.gle/sampleLegacyForm"
+
+    # 5. In-app registration on events without registration_url
+    # Free event -> immediate confirmation
+    book_free = await client.post(f"/api/registrations/{free_ev['id']}", headers=h_part)
+    assert book_free.status_code == 201
+    assert book_free.json()["booking_status"] == "confirmed"
+
+    # Paid event -> reserves 15m seat and provides Razorpay checkout
+    book_paid = await client.post(f"/api/registrations/{paid_ev['id']}", headers=h_part)
+    assert book_paid.status_code == 201
+    assert book_paid.json()["booking_status"] == "pending_payment"
+    assert book_paid.json()["razorpay_checkout"] is not None

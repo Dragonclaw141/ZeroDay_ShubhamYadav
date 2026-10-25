@@ -6,6 +6,7 @@
   <title>Participant dashboard | EventADDA</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/extra.css">
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 <body data-page="participant-dashboard">
   <header class="header">
@@ -34,6 +35,10 @@
         <div id="participantSummaryBar" class="participant-summary-bar"></div>
       </div>
       <div class="discovery-hero-actions">
+        <a href="#myBookingsSection" class="btn btn-primary hero-action-btn" id="jumpToBookingsBtn">
+          <span>🎟 My Bookings</span>
+          <span id="myBookingsCountBadge" class="booking-count-pill" hidden>0</span>
+        </a>
         <button id="toggleProfileBtn" type="button" class="btn btn-light profile-toggle-btn" aria-expanded="false" aria-controls="stage1ProfileSection">
           <span>⚙ Account &amp; Preferences</span>
         </button>
@@ -42,6 +47,42 @@
 
     <div id="stage1ProfileSection" class="profile-panel"></div>
     <div id="eventsStatusBanner"></div>
+
+    <section id="upcomingBookingsSection" class="bookings-panel upcoming-bookings-panel" hidden>
+      <div class="bookings-panel-header">
+        <div>
+          <span class="eyebrow">CONFIRMED SCHEDULE</span>
+          <h2>Upcoming Confirmed Events</h2>
+          <p class="muted">Active confirmed bookings for future published events. Automated reminders are sent 24 hours before start time.</p>
+        </div>
+        <span id="upcomingConfirmedCount" class="live-count-pill">0 Upcoming</span>
+      </div>
+      <div id="upcomingBookingsGrid" class="upcoming-bookings-grid"></div>
+    </section>
+
+    <section id="myBookingsSection" class="bookings-panel">
+      <div class="bookings-panel-header">
+        <div>
+          <span class="eyebrow">REGISTRATION &amp; PAYMENT HISTORY</span>
+          <h2>My Bookings</h2>
+          <p class="muted">Track confirmed seats, 15-minute payment holds, Razorpay Test Mode payment attempts, and past cancellations.</p>
+        </div>
+        <div class="bookings-filter-pills" id="bookingStatusFilters" role="tablist" aria-label="Filter bookings by status">
+          <button type="button" class="category-pill active" data-booking-status="all">All</button>
+          <button type="button" class="category-pill" data-booking-status="confirmed">Confirmed</button>
+          <button type="button" class="category-pill" data-booking-status="pending_payment">Pending Payment</button>
+          <button type="button" class="category-pill" data-booking-status="cancelled_or_expired">Cancelled / Expired</button>
+          <button type="button" class="category-pill" data-booking-status="resolution_required">Resolution Required</button>
+        </div>
+      </div>
+      <p id="bookingsActionMessage" class="form-message" aria-live="polite"></p>
+      <div id="myBookingsList" class="bookings-list"></div>
+      <div id="myBookingsEmpty" class="empty-state empty-state-card bookings-empty-card" hidden>
+        <div class="empty-state-icon">🎟</div>
+        <h3 id="myBookingsEmptyTitle">No bookings in this view yet</h3>
+        <p id="myBookingsEmptyText">Explore upcoming events below to reserve your seat or complete a free registration.</p>
+      </div>
+    </section>
 
     <div id="categoryPills" class="category-pills" role="tablist" aria-label="Filter by category quick pills">
       <button type="button" class="category-pill active" data-pill-category="All">✦ All For You</button>

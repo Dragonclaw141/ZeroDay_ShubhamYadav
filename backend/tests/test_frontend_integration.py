@@ -76,11 +76,18 @@ async def test_frontend_assets_and_api_client_structure():
     assert 'id="priceFilter"' in part_dash_html
     assert 'id="categoryPills"' in part_dash_html
     assert 'id="toggleProfileBtn"' in part_dash_html
+    assert 'id="jumpToBookingsBtn"' in part_dash_html
+    assert 'href="#myBookingsSection"' in part_dash_html
+    assert "My Bookings" in part_dash_html
+    assert 'id="upcomingBookingsSection"' in part_dash_html
+    assert 'id="myBookingsSection"' in part_dash_html
+    assert 'id="bookingStatusFilters"' in part_dash_html
 
     org_dash_html = (FRONTEND_DIR / "dashboard-organizer.html").read_text(encoding="utf-8")
     assert 'id="evPriceType"' in org_dash_html
     assert 'id="evPriceAmount"' in org_dash_html
-    assert 'id="evFormUrl"' in org_dash_html
+    assert 'id="evFormUrl"' not in org_dash_html
+    assert "Google Form" not in org_dash_html
 
     main_js = (FRONTEND_DIR / "js" / "main.js").read_text(encoding="utf-8")
     assert "affiliation_details" in main_js
@@ -106,8 +113,13 @@ async def test_frontend_assets_and_api_client_structure():
     ]:
         assert endpoint in main_js, f"Missing endpoint {endpoint} in frontend/js/main.js"
 
-    # Verify Stage 3 registration boundary is explicitly reported
+    # Verify Stage 3 registration & payment endpoints are wired in frontend/js/main.js
     assert "POST /api/registrations/{event_id}" in main_js
+    assert "/api/registrations/me" in main_js
+    assert "/api/registrations/upcoming" in main_js
+    assert "/verify-payment" in main_js
+    assert "/payment-order" in main_js
+    assert "/reconcile" in main_js
 
 
 async def test_frontend_participant_signup_onboarding_and_login_flow(client: AsyncClient):

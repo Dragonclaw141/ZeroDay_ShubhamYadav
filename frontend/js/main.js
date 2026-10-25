@@ -554,6 +554,13 @@
       priceAmount: ev.price_amount != null ? ev.price_amount : null,
       formUrl: ev.registration_url || '',
       status: ev.status || 'published',
+      maxCapacity: ev.max_capacity != null ? Number(ev.max_capacity) : 100,
+      registeredCount: ev.registered_count != null ? Number(ev.registered_count) : 0,
+      spotsRemaining: ev.spots_remaining != null ? Number(ev.spots_remaining) : 100,
+      registrationOpen: ev.registration_open !== false,
+      registrationDeadline: ev.registration_deadline || ev.start_date || startIso,
+      isRegistered: Boolean(ev.is_registered),
+      myRegistration: ev.my_registration || null,
       organizerId: ev.organizer_id,
       organizerName: ev.organizer_name || 'Event Organizer'
     };
@@ -1032,6 +1039,578 @@
     }
   }
 
+  function fmtDateTimeISO(isoStr) {
+    if (!isoStr) return '—';
+    const d = new Date(isoStr);
+    if (isNaN(d)) return String(isoStr);
+    return d.toLocaleString(undefined, {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
+
+  /* ---------- Stage 3: Razorpay Test Mode Checkout Modal & Bookings (POST /api/registrations/{event_id}) ---------- */
+  let razorpayScriptPromise = null;
+  function loadRazorpayScript() {
+    if (typeof window.Razorpay === 'function') {
+      return Promise.resolve(true);
+    }
+    if (razorpayScriptPromise) {
+      return razorpayScriptPromise;
+    }
+    razorpayScriptPromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector('script[src*="checkout.razorpay.com"]');
+      if (existing && typeof window.Razorpay === 'function') {
+        return resolve(true);
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => {
+        razorpayScriptPromise = null;
+        reject(new Error('Failed to load Razorpay Checkout script'));
+      };
+      document.head.appendChild(script);
+    });
+    return razorpayScriptPromise;
+  }
+
+  async function startRazorpayCheckout(mutationRes, onComplete) {
+    const checkout = mutationRes && mutationRes.razorpay_checkout;
+    const reg = mutationRes && mutationRes.registration;
+    if (!checkout || !reg) {
+      if (typeof onComplete === 'function') onComplete(mutationRes);
+      return;
+    }
+
+    // Branch: If sandbox_mode is enabled (local offline development), open simulated test modal
+    if (checkout.sandbox_mode) {
+      openRazorpayTestCheckoutModal(mutationRes, onComplete);
+      return;
+    }
+
+    // Branch: Genuine Razorpay Test Mode flow via official Checkout.js
+    try {
+      await loadRazorpayScript();
+    } catch (err) {
+      const errMsg = 'Could not load Razorpay Checkout script. Please verify your internet connection or ad blocker.';
+      if (typeof onComplete === 'function') {
+        onComplete({
+          message: errMsg,
+          booking_status: reg.status || 'pending_payment',
+          registration: reg
+        });
+      }
+      return;
+    }
+
+    if (typeof window.Razorpay !== 'function') {
+      const errMsg = 'Razorpay Checkout SDK is not available in the browser.';
+      if (typeof onComplete === 'function') {
+        onComplete({
+          message: errMsg,
+          booking_status: reg.status || 'pending_payment',
+          registration: reg
+        });
+      }
+      return;
+    }
+
+    const expLabel = reg.reservation_expires_at
+      ? fmtDateTimeISO(reg.reservation_expires_at)
+      : '15 minutes from reservation';
+
+    const options = {
+      key: checkout.key_id,
+      amount: checkout.amount_paise,
+      currency: checkout.currency || 'INR',
+      name: 'EventADDA',
+      description: checkout.event_title || 'Event Booking',
+      order_id: checkout.order_id,
+      prefill: {
+        name: checkout.participant_name || '',
+        email: checkout.participant_email || ''
+      },
+      notes: {
+        registration_id: reg.id || '',
+        event_id: reg.event_id || ''
+      },
+      theme: {
+        color: '#6d4aff'
+      },
+      modal: {
+        ondismiss: function () {
+          if (typeof onComplete === 'function') {
+            onComplete({
+              message: 'Checkout window closed. Your 15-minute seat reservation remains active until ' + expLabel + ' — you can resume payment anytime before expiry.',
+              booking_status: reg.status || 'pending_payment',
+              registration: reg
+            });
+          }
+        }
+      },
+      handler: async function (response) {
+        try {
+          const verifyRes = await apiRequest('/api/registrations/' + encodeURIComponent(reg.id) + '/verify-payment', {
+            method: 'POST',
+            body: {
+              razorpay_order_id: response.razorpay_order_id || checkout.order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature
+            }
+          });
+          if (typeof onComplete === 'function') onComplete(verifyRes);
+        } catch (err) {
+          if (typeof onComplete === 'function') {
+            onComplete({
+              message: err.message || 'Payment verification failed.',
+              booking_status: reg.status || 'pending_payment',
+              registration: reg
+            });
+          }
+        }
+      }
+    };
+
+    try {
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', async function (resp) {
+        try {
+          const errObj = (resp && resp.error) || {};
+          const meta = errObj.metadata || {};
+          const failedRes = await apiRequest('/api/registrations/' + encodeURIComponent(reg.id) + '/payment-failed', {
+            method: 'POST',
+            body: {
+              razorpay_order_id: meta.order_id || checkout.order_id,
+              razorpay_payment_id: meta.payment_id || 'pay_failed_' + Date.now(),
+              error_code: errObj.code || 'BAD_REQUEST_ERROR',
+              error_description: errObj.description || 'Payment failed at gateway'
+            }
+          });
+          if (typeof onComplete === 'function') onComplete(failedRes);
+        } catch (err) {
+          if (typeof onComplete === 'function') {
+            onComplete({
+              message: err.message || 'Payment failed and error could not be recorded.',
+              booking_status: reg.status || 'pending_payment',
+              registration: reg
+            });
+          }
+        }
+      });
+      rzp.open();
+    } catch (err) {
+      if (typeof onComplete === 'function') {
+        onComplete({
+          message: 'Could not open Razorpay checkout: ' + (err.message || String(err)),
+          booking_status: reg.status || 'pending_payment',
+          registration: reg
+        });
+      }
+    }
+  }
+
+  function openRazorpayTestCheckoutModal(mutationRes, onComplete) {
+    const checkout = mutationRes && mutationRes.razorpay_checkout;
+    const reg = mutationRes && mutationRes.registration;
+    const attempt = mutationRes && mutationRes.payment_attempt;
+    if (!checkout || !reg) {
+      if (typeof onComplete === 'function') onComplete(mutationRes);
+      return;
+    }
+
+    const existingModal = $('razorpayTestModal');
+    if (existingModal) existingModal.remove();
+
+    const modalWrap = document.createElement('div');
+    modalWrap.id = 'razorpayTestModal';
+    modalWrap.className = 'rzp-modal-backdrop';
+    modalWrap.setAttribute('role', 'dialog');
+    modalWrap.setAttribute('aria-modal', 'true');
+    modalWrap.setAttribute('aria-labelledby', 'rzpModalTitle');
+
+    const expLabel = reg.reservation_expires_at ? fmtDateTimeISO(reg.reservation_expires_at) : '15 minutes from reservation';
+    const attemptNum = attempt ? attempt.attempt_number : 1;
+    // Local sandbox only: the backend supplies the simulated payment ID it signed for.
+    // In real Razorpay Test Mode no token is issued, so this modal cannot confirm a booking.
+    const isSandbox = Boolean(
+      checkout.sandbox_mode && checkout.local_test_payment_id && checkout.local_test_signature_Token
+    );
+
+    modalWrap.innerHTML =
+      '<div class="rzp-modal-card">' +
+        '<div class="rzp-modal-header">' +
+          '<div>' +
+            '<span class="rzp-test-badge">' + (isSandbox ? 'LOCAL SIMULATED CHECKOUT · NO REAL PAYMENT' : 'RAZORPAY TEST MODE') + '</span>' +
+            '<h3 id="rzpModalTitle">EventADDA</h3>' +
+            '<div style="font-size:13px;opacity:0.86">' + esc(checkout.event_title || 'Event Booking') + '</div>' +
+          '</div>' +
+          '<div class="rzp-amount-hero">' +
+            '<strong>₹' + esc(checkout.amount_inr) + '</strong>' +
+            '<span>' + esc(checkout.amount_paise) + ' paise · INR</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="rzp-modal-body">' +
+          '<div class="rzp-order-meta">' +
+            '<div><b>Razorpay Order ID:</b> <code>' + esc(checkout.order_id) + '</code></div>' +
+            '<div><b>Payment Attempt:</b> #' + esc(attemptNum) + ' · <b>Key:</b> <code>' + esc(checkout.key_id) + '</code></div>' +
+            '<div><b>Participant:</b> ' + esc(checkout.participant_name || 'Participant') + (checkout.participant_email ? ' (' + esc(checkout.participant_email) + ')' : '') + '</div>' +
+            '<div><b>Seat Hold Expires:</b> ' + esc(expLabel) + '</div>' +
+          '</div>' +
+          '<div class="rzp-method-tabs" id="rzpMethodTabs">' +
+            '<button type="button" class="rzp-method-tab active" data-rzp-method="upi">⚡ UPI (success@razorpay)</button>' +
+            '<button type="button" class="rzp-method-tab" data-rzp-method="card">💳 Test Card (4111)</button>' +
+            '<button type="button" class="rzp-method-tab" data-rzp-method="netbanking">🏦 Netbanking</button>' +
+          '</div>' +
+          '<p id="rzpModalMessage" class="form-message" aria-live="polite"></p>' +
+          '<div class="rzp-actions-stack">' +
+            '<button type="button" id="rzpSimulateSuccessBtn" class="btn btn-rzp-success full-width"' + (isSandbox ? '' : ' disabled') + '>' +
+              (isSandbox
+                ? '✓ Simulate ₹' + esc(checkout.amount_inr) + ' Payment (Server Verifies Sandbox Signature)'
+                : 'Real Razorpay Checkout is not available in this simulated modal') +
+            '</button>' +
+            '<button type="button" id="rzpSimulateFailBtn" class="btn btn-rzp-danger full-width">' +
+              '✕ Simulate Payment Failure (Keep 15m Seat Hold for Retry)' +
+            '</button>' +
+            '<button type="button" id="rzpDismissBtn" class="btn btn-light full-width">' +
+              'Close / Interrupt Checkout (Pay Later within 15m)' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(modalWrap);
+
+    const tabsWrap = $('rzpMethodTabs');
+    if (tabsWrap) {
+      tabsWrap.addEventListener('click', (ev) => {
+        const tab = ev.target.closest('[data-rzp-method]');
+        if (!tab) return;
+        Array.from(tabsWrap.querySelectorAll('.rzp-method-tab')).forEach((b) => b.classList.remove('active'));
+        tab.classList.add('active');
+      });
+    }
+
+    const closeModal = (resPayload) => {
+      modalWrap.remove();
+      if (typeof onComplete === 'function') onComplete(resPayload);
+    };
+
+    const successBtn = $('rzpSimulateSuccessBtn');
+    const failBtn = $('rzpSimulateFailBtn');
+    const dismissBtn = $('rzpDismissBtn');
+
+    if (successBtn) {
+      successBtn.addEventListener('click', async () => {
+        if (!isSandbox) {
+          say('This modal only simulates local sandbox payments. Configure real Razorpay Checkout to pay in Razorpay Test Mode.', false, 'rzpModalMessage');
+          return;
+        }
+        successBtn.disabled = true;
+        if (failBtn) failBtn.disabled = true;
+        say('Submitting simulated payment for server-side signature verification…', true, 'rzpModalMessage');
+        try {
+          const verifiedRes = await apiRequest('/api/registrations/' + encodeURIComponent(reg.id) + '/verify-payment', {
+            method: 'POST',
+            body: {
+              razorpay_order_id: checkout.order_id,
+              razorpay_payment_id: checkout.local_test_payment_id,
+              razorpay_signature: checkout.local_test_signature_Token
+            }
+          });
+          closeModal(verifiedRes);
+        } catch (err) {
+          say(err.message || 'Payment verification failed.', false, 'rzpModalMessage');
+          successBtn.disabled = false;
+          if (failBtn) failBtn.disabled = false;
+        }
+      });
+    }
+
+    if (failBtn) {
+      failBtn.addEventListener('click', async () => {
+        failBtn.disabled = true;
+        if (successBtn) successBtn.disabled = true;
+        say('Recording failed checkout attempt while preserving your 15-minute seat hold…', false, 'rzpModalMessage');
+        try {
+          const failedRes = await apiRequest('/api/registrations/' + encodeURIComponent(reg.id) + '/payment-failed', {
+            method: 'POST',
+            body: {
+              razorpay_order_id: checkout.order_id,
+              razorpay_payment_id: 'pay_failed_' + Date.now(),
+              error_code: 'BAD_REQUEST_ERROR',
+              error_description: 'Simulated test payment declined by bank'
+            }
+          });
+          closeModal(failedRes);
+        } catch (err) {
+          say(err.message || 'Could not record payment failure.', false, 'rzpModalMessage');
+          failBtn.disabled = false;
+          if (successBtn) successBtn.disabled = false;
+        }
+      });
+    }
+
+    if (dismissBtn) {
+      dismissBtn.addEventListener('click', () => {
+        closeModal({
+          message: 'Checkout interrupted. Your seat remains reserved until ' + expLabel + ' — you can resume payment anytime before expiry.',
+          booking_status: reg.status,
+          registration: reg
+        });
+      });
+    }
+  }
+
+  async function setupParticipantBookings(user) {
+    const upcomingSec = $('upcomingBookingsSection');
+    const upcomingGrid = $('upcomingBookingsGrid');
+    const upcomingCount = $('upcomingConfirmedCount');
+    const bookingsList = $('myBookingsList');
+    const bookingsEmpty = $('myBookingsEmpty');
+    const filterWrap = $('bookingStatusFilters');
+    const countBadge = $('myBookingsCountBadge');
+    if (!bookingsList) return;
+
+    let activeStatusFilter = 'all';
+
+    const renderBookingBadge = (statusVal, labelText) => {
+      const cls = 'status-badge status-badge-' + esc(statusVal || 'confirmed');
+      return '<span class="' + cls + '">' + esc(labelText || statusVal) + '</span>';
+    };
+
+    const loadBookings = async () => {
+      try {
+        const querySuffix = activeStatusFilter && activeStatusFilter !== 'all'
+          ? '?status=' + encodeURIComponent(activeStatusFilter)
+          : '';
+        const [allRes, upRes] = await Promise.all([
+          apiRequest('/api/registrations/me' + querySuffix, { method: 'GET' }),
+          apiRequest('/api/registrations/upcoming', { method: 'GET' })
+        ]);
+
+        const bookings = Array.isArray(allRes.registrations) ? allRes.registrations : [];
+        const upcoming = Array.isArray(upRes.registrations) ? upRes.registrations : [];
+
+        if (countBadge) {
+          countBadge.hidden = bookings.length === 0 && activeStatusFilter === 'all';
+          if (activeStatusFilter === 'all') {
+            countBadge.textContent = String(bookings.length);
+          }
+        }
+
+        // Render Upcoming Confirmed Events section
+        if (upcomingSec && upcomingGrid) {
+          if (upcoming.length === 0) {
+            upcomingSec.hidden = true;
+            upcomingGrid.innerHTML = '';
+          } else {
+            upcomingSec.hidden = false;
+            if (upcomingCount) {
+              upcomingCount.textContent = upcoming.length + (upcoming.length === 1 ? ' Confirmed Event' : ' Confirmed Events');
+            }
+            upcomingGrid.innerHTML = upcoming.map((reg) => {
+              const ev = reg.event || {};
+              const dtStr = ev.start_date ? fmtDateTimeISO(ev.start_date) : 'Upcoming';
+              return (
+                '<article class="upcoming-booking-card">' +
+                  '<div>' +
+                    '<div class="booking-row-badges">' +
+                      renderBookingBadge('confirmed', '✓ Confirmed Seat') +
+                      '<span class="tag tag-purple">' + esc(BACKEND_TO_UI_CATEGORY[ev.category] || ev.category || 'Event') + '</span>' +
+                    '</div>' +
+                    '<h3><a href="event.html?id=' + encodeURIComponent(reg.event_id) + '">' + esc(ev.title || 'Event') + '</a></h3>' +
+                    '<div class="booking-row-meta">📅 ' + esc(dtStr) + '</div>' +
+                    '<div class="booking-row-meta">📍 ' + esc(ev.venue_name ? ev.venue_name + ', ' : '') + esc(ev.city || 'Online') + ' · ' + esc(ev.mode || 'In-person') + '</div>' +
+                    '<div class="fine-print" style="margin-top:6px">🔔 24-hour automated reminder scheduled</div>' +
+                  '</div>' +
+                  '<div class="booking-actions-row">' +
+                    '<a class="btn btn-light" href="event.html?id=' + encodeURIComponent(reg.event_id) + '">View Event →</a>' +
+                    (reg.can_cancel
+                      ? '<button type="button" class="btn btn-rzp-danger" data-cancel-reg="' + esc(reg.id) + '">Cancel Booking</button>'
+                      : '') +
+                  '</div>' +
+                '</article>'
+              );
+            }).join('');
+          }
+        }
+
+        // Render My Bookings history list
+        if (bookings.length === 0) {
+          bookingsList.innerHTML = '';
+          if (bookingsEmpty) bookingsEmpty.hidden = false;
+        } else {
+          if (bookingsEmpty) bookingsEmpty.hidden = true;
+          bookingsList.innerHTML = bookings.map((reg) => {
+            const ev = reg.event || {};
+            const uiCat = BACKEND_TO_UI_CATEGORY[ev.category] || ev.category || 'Event';
+            const priceLabel = reg.price_type === 'paid' && reg.price_amount > 0
+              ? '₹' + esc(reg.price_amount) + ' (Paid)'
+              : 'Free Entry';
+            const pay = reg.latest_payment;
+            const paySummaryHtml = pay
+              ? '<div class="booking-payment-summary">' +
+                  '<span><b>Payment Attempt #' + esc(pay.attempt_number) + ':</b></span>' +
+                  renderBookingBadge(pay.status, pay.status_label) +
+                  '<span>Order: <code>' + esc(pay.razorpay_order_id) + '</code></span>' +
+                  (pay.razorpay_payment_id ? '<span>Payment ID: <code>' + esc(pay.razorpay_payment_id) + '</code></span>' : '') +
+                  (pay.failure_reason ? '<span>· ' + esc(pay.failure_reason) + '</span>' : '') +
+                '</div>'
+              : '';
+
+            const holdExpiryNote = reg.status === 'pending_payment' && reg.reservation_expires_at
+              ? '<div class="booking-row-meta" style="color:#b45309;font-weight:700">⏳ 15m Seat Hold expires: ' + esc(fmtDateTimeISO(reg.reservation_expires_at)) + '</div>'
+              : '';
+
+            const cancelNote = reg.status === 'cancelled' && reg.cancellation_reason
+              ? '<div class="booking-row-meta">Reason: ' + esc(reg.cancellation_reason) + '</div>'
+              : '';
+
+            const resolutionNote = reg.status === 'resolution_required' && reg.resolution_reason
+              ? '<div class="booking-row-meta" style="color:#b91c1c;font-weight:600">⚠ ' + esc(reg.resolution_reason) + '</div>'
+              : '';
+
+            const showReconcile = Boolean(
+              pay && (reg.status === 'pending_payment' || reg.status === 'resolution_required' || pay.status === 'pending')
+            );
+
+            return (
+              '<article class="booking-row-card" data-reg-id="' + esc(reg.id) + '" data-booking-status-item="' + esc(reg.status) + '">' +
+                '<div class="booking-row-main">' +
+                  '<div class="booking-row-badges">' +
+                    renderBookingBadge(reg.status, reg.status_label) +
+                    '<span class="tag tag-purple">' + esc(uiCat) + '</span>' +
+                    '<span class="tag ' + (reg.price_type === 'paid' ? 'tag-orange' : 'tag-green') + '">' + priceLabel + '</span>' +
+                  '</div>' +
+                  '<h3 class="booking-row-title"><a href="event.html?id=' + encodeURIComponent(reg.event_id) + '">' + esc(ev.title || 'Event #' + reg.event_id) + '</a></h3>' +
+                  '<div class="booking-row-meta">' +
+                    '📅 ' + esc(ev.start_date ? fmtDateTimeISO(ev.start_date) : '—') +
+                    ' · 📍 ' + esc(ev.venue_name ? ev.venue_name + ', ' : '') + esc(ev.city || 'Online') +
+                  '</div>' +
+                  holdExpiryNote +
+                  cancelNote +
+                  resolutionNote +
+                  paySummaryHtml +
+                '</div>' +
+                '<div class="booking-row-actions">' +
+                  (reg.can_retry_payment
+                    ? '<button type="button" class="btn btn-primary" data-retry-payment="' + esc(reg.id) + '">Pay ₹' + esc(reg.price_amount) + ' / Retry →</button>'
+                    : '') +
+                  (showReconcile
+                    ? '<button type="button" class="btn btn-light" data-reconcile-payment="' + esc(reg.id) + '">↻ Reconcile Status</button>'
+                    : '') +
+                  (reg.can_cancel
+                    ? '<button type="button" class="btn btn-rzp-danger" data-cancel-reg="' + esc(reg.id) + '">Cancel Booking</button>'
+                    : '') +
+                  '<a class="btn btn-light" href="event.html?id=' + encodeURIComponent(reg.event_id) + '">Event Details →</a>' +
+                '</div>' +
+              '</article>'
+            );
+          }).join('');
+        }
+      } catch (err) {
+        say(err.message || 'Could not load your bookings.', false, 'bookingsActionMessage');
+      }
+    };
+
+    const handleBookingActionClick = async (ev) => {
+      const retryBtn = ev.target.closest('[data-retry-payment]');
+      const reconcileBtn = ev.target.closest('[data-reconcile-payment]');
+      const cancelBtn = ev.target.closest('[data-cancel-reg]');
+
+      if (retryBtn) {
+        const regId = retryBtn.getAttribute('data-retry-payment');
+        retryBtn.disabled = true;
+        say('Creating Razorpay Test Mode payment order…', true, 'bookingsActionMessage');
+        try {
+          const orderRes = await apiRequest('/api/registrations/' + encodeURIComponent(regId) + '/payment-order', {
+            method: 'POST'
+          });
+          startRazorpayCheckout(orderRes, async (finalRes) => {
+            if (finalRes && finalRes.message) {
+              say(finalRes.message, finalRes.booking_status === 'confirmed', 'bookingsActionMessage');
+            }
+            await loadBookings();
+          });
+        } catch (err) {
+          say(err.message || 'Could not initiate payment retry.', false, 'bookingsActionMessage');
+        } finally {
+          retryBtn.disabled = false;
+        }
+      }
+
+      if (reconcileBtn) {
+        const regId = reconcileBtn.getAttribute('data-reconcile-payment');
+        reconcileBtn.disabled = true;
+        say('Reconciling authoritative payment status with server…', true, 'bookingsActionMessage');
+        try {
+          const recRes = await apiRequest('/api/registrations/' + encodeURIComponent(regId) + '/reconcile', {
+            method: 'POST',
+            body: {}
+          });
+          say(recRes.message || 'Status reconciled.', recRes.booking_status === 'confirmed', 'bookingsActionMessage');
+          await loadBookings();
+        } catch (err) {
+          say(err.message || 'Could not reconcile payment status.', false, 'bookingsActionMessage');
+        } finally {
+          reconcileBtn.disabled = false;
+        }
+      }
+
+      if (cancelBtn) {
+        const regId = cancelBtn.getAttribute('data-cancel-reg');
+        if (!confirm('Cancel this booking? Your seat will be released and future reminders suppressed. Note: Cancellation does not perform or imply a payment refund.')) {
+          return;
+        }
+        cancelBtn.disabled = true;
+        say('Cancelling booking…', true, 'bookingsActionMessage');
+        try {
+          const cancelRes = await apiRequest('/api/registrations/' + encodeURIComponent(regId) + '/cancel', {
+            method: 'POST',
+            body: { reason: 'Cancelled by participant from dashboard' }
+          });
+          say(cancelRes.message || 'Booking cancelled.', true, 'bookingsActionMessage');
+          await loadBookings();
+          setupListing(user);
+        } catch (err) {
+          say(err.message || 'Could not cancel booking.', false, 'bookingsActionMessage');
+        } finally {
+          cancelBtn.disabled = false;
+        }
+      }
+    };
+
+    if (filterWrap && !filterWrap.dataset.bound) {
+      filterWrap.dataset.bound = '1';
+      filterWrap.addEventListener('click', async (ev) => {
+        const pill = ev.target.closest('[data-booking-status]');
+        if (!pill) return;
+        const nextStatus = pill.getAttribute('data-booking-status') || 'all';
+        activeStatusFilter = nextStatus;
+        Array.from(filterWrap.querySelectorAll('[data-booking-status]')).forEach((btn) => {
+          btn.classList.toggle('active', btn.getAttribute('data-booking-status') === nextStatus);
+        });
+        await loadBookings();
+      });
+    }
+
+    if (bookingsList && !bookingsList.dataset.bound) {
+      bookingsList.dataset.bound = '1';
+      bookingsList.addEventListener('click', handleBookingActionClick);
+    }
+    if (upcomingGrid && !upcomingGrid.dataset.bound) {
+      upcomingGrid.dataset.bound = '1';
+      upcomingGrid.addEventListener('click', handleBookingActionClick);
+    }
+
+    await loadBookings();
+  }
+
   function initParticipantDashboard(user) {
     if (!user || user.role !== 'participant') {
       location.replace('login-participant.html');
@@ -1039,6 +1618,7 @@
     }
     if ($('userName')) $('userName').textContent = user.full_name;
     renderProfileAndOnboardingPanel(user);
+    setupParticipantBookings(user);
     setupListing(user);
   }
 
@@ -1156,7 +1736,7 @@
       $('evVenue').value = e.venue || '';
       $('evDesc').value = e.description || '';
       $('evDetails').value = e.details || '';
-      $('evFormUrl').value = e.formUrl || '';
+      if ($('evFormUrl')) $('evFormUrl').value = e.formUrl || '';
       if ($('evPriceType') && $('evPriceAmount')) {
         $('evPriceType').value = e.priceType || 'free';
         syncPriceFieldVisibility();
@@ -1219,9 +1799,11 @@
           end_date: endDateObj.toISOString(),
           registration_deadline: startDateObj.toISOString(),
           price_type: priceType,
-          price_amount: priceType === 'paid' ? rawPriceAmt : null,
-          registration_url: formUrl || null
+          price_amount: priceType === 'paid' ? rawPriceAmt : null
         };
+        if ($('evFormUrl')) {
+          payload.registration_url = formUrl || null;
+        }
 
         if (submitBtn) submitBtn.disabled = true;
         say(editingId ? 'Saving changes…' : 'Publishing event to MongoDB…', true);
@@ -1328,20 +1910,147 @@
 
     const c = catInfo(e.category);
     const own = Boolean(user && user.role === 'organizer' && e.organizerId === user.id);
-    let actionHtml;
+
+    const pctFilled = e.maxCapacity > 0
+      ? Math.min(100, Math.round((e.registeredCount / e.maxCapacity) * 100))
+      : 100;
+    const isSoldOut = e.spotsRemaining <= 0;
+    const deadlinePassed = new Date(e.registrationDeadline) <= new Date();
+
+    const capacityMeterHtml =
+      '<div class="capacity-meter-box">' +
+        '<div class="capacity-meter-top">' +
+          '<span>🎟 Seat Availability: <strong>' + (isSoldOut ? 'SOLD OUT' : (esc(e.spotsRemaining) + ' of ' + esc(e.maxCapacity) + ' seats remaining')) + '</strong></span>' +
+          '<span>' + esc(e.registeredCount) + ' booked / held</span>' +
+        '</div>' +
+        '<div class="capacity-bar-track">' +
+          '<div class="capacity-bar-fill' + (isSoldOut ? ' sold-out' : '') + '" style="width:' + pctFilled + '%"></div>' +
+        '</div>' +
+        '<div class="fine-print" style="margin-top:6px">Registration deadline: ' + esc(fmtDateTimeISO(e.registrationDeadline)) + '</div>' +
+      '</div>';
+
+    const secondaryExtHtml = e.formUrl
+      ? '<div style="margin-top:10px">' +
+          '<a class="text-link" id="externalRegisterBtn" href="' + esc(e.formUrl) + '" target="_blank" rel="noopener noreferrer">' +
+            'Organizer supplemental link / external form ↗' +
+          '</a>' +
+        '</div>'
+      : '';
+
+    let actionHtml = '';
     if (!user) {
       actionHtml =
-        '<a class="btn btn-primary full-width" href="login-participant.html">Log in as a participant to register →</a>' +
-        '<p class="fine-print">Registration and any event fee payment happen on the organizer\'s external form after logging in.</p>';
+        '<a class="btn btn-primary full-width" href="login-participant.html">Log in as a participant to book your seat →</a>' +
+        '<p class="fine-print">Participant accounts can book seats directly on EventADDA with instant confirmation or Razorpay Test Mode checkout.</p>' +
+        secondaryExtHtml;
     } else if (user.role === 'participant') {
-      const extBtn = e.formUrl
-        ? '<a class="btn btn-primary full-width" id="externalRegisterBtn" href="' + esc(e.formUrl) + '" target="_blank" rel="noopener noreferrer">Register via Organizer\'s External Form ↗</a>' +
-          '<p class="fine-print">Registration and any payment (for paid events) happen directly on the organizer\'s external form. EventADDA does not process payments or mark external form opens as completed registrations.</p>'
-        : '<div class="demo-notice">The organizer has not provided an external registration link for this event yet.</div>';
-      actionHtml =
-        extBtn +
-        '<p id="regMessage" class="form-message" aria-live="polite"></p>' +
-        '<p class="fine-print">In-app event registration (POST /api/registrations/{event_id}) is scheduled for Stage 3.</p>';
+      const myReg = e.myRegistration;
+      const regStatus = myReg ? myReg.status : null;
+      const latestPay = myReg ? myReg.latest_payment : null;
+
+      if (regStatus === 'confirmed') {
+        actionHtml =
+          '<div class="booking-state-box confirmed" id="participantBookingCard">' +
+            '<div class="booking-state-header">' +
+              '<span class="status-badge status-badge-confirmed">✓ Booking Confirmed</span>' +
+              '<span class="fine-print">Booking ID: <code>' + esc(myReg.id) + '</code></span>' +
+            '</div>' +
+            '<p style="margin:4px 0 6px;font-weight:600;color:#14532d">' +
+              'Your seat is confirmed! A confirmation email and an automated reminder 24 hours before the event are scheduled.' +
+            '</p>' +
+            (latestPay && latestPay.razorpay_payment_id
+              ? '<div class="fine-print">Paid ₹' + esc(myReg.price_amount) + ' · Razorpay Payment ID: <code>' + esc(latestPay.razorpay_payment_id) + '</code></div>'
+              : '') +
+            '<div class="booking-actions-row">' +
+              '<a class="btn btn-light" href="dashboard-participant.html#myBookingsSection">View in My Bookings →</a>' +
+              (myReg.can_cancel
+                ? '<button class="btn btn-rzp-danger" type="button" id="cancelEventBookingBtn" data-reg-id="' + esc(myReg.id) + '">Cancel Booking</button>'
+                : '<span class="fine-print">Cancellation deadline has passed.</span>') +
+            '</div>' +
+          '</div>' +
+          '<p id="regMessage" class="form-message" aria-live="polite"></p>' +
+          secondaryExtHtml;
+      } else if (regStatus === 'pending_payment') {
+        const isPayPending = Boolean(latestPay && latestPay.status === 'pending');
+        actionHtml =
+          '<div class="booking-state-box pending_payment" id="participantBookingCard">' +
+            '<div class="booking-state-header">' +
+              '<span class="status-badge status-badge-pending_payment">⏳ Seat Reserved — Payment Pending</span>' +
+              (myReg.reservation_expires_at
+                ? '<span class="fine-print">Hold expires: <strong>' + esc(fmtDateTimeISO(myReg.reservation_expires_at)) + '</strong></span>'
+                : '') +
+            '</div>' +
+            '<p style="margin:4px 0 8px;color:#78350f">' +
+              (isPayPending
+                ? 'Your payment attempt is currently awaiting authoritative gateway confirmation. Your seat remains held while we reconcile.'
+                : 'Your seat is held for 15 minutes. Complete Razorpay Test Mode checkout to confirm your booking.') +
+            '</p>' +
+            (latestPay
+              ? '<div class="fine-print">Latest Attempt #' + esc(latestPay.attempt_number) + ': <strong>' + esc(latestPay.status_label) + '</strong> (Order <code>' + esc(latestPay.razorpay_order_id) + '</code>)</div>'
+              : '') +
+            '<div class="booking-actions-row">' +
+              (myReg.can_retry_payment
+                ? '<button class="btn btn-primary" type="button" id="retryEventPaymentBtn" data-reg-id="' + esc(myReg.id) + '">Complete / Retry Payment (₹' + esc(myReg.price_amount) + ') →</button>'
+                : '') +
+              '<button class="btn btn-light" type="button" id="reconcileEventPaymentBtn" data-reg-id="' + esc(myReg.id) + '">↻ Reconcile Payment Status</button>' +
+              (myReg.can_cancel
+                ? '<button class="btn btn-rzp-danger" type="button" id="cancelEventBookingBtn" data-reg-id="' + esc(myReg.id) + '">Cancel Reservation</button>'
+                : '') +
+            '</div>' +
+          '</div>' +
+          '<p id="regMessage" class="form-message" aria-live="polite"></p>' +
+          secondaryExtHtml;
+      } else if (regStatus === 'resolution_required') {
+        actionHtml =
+          '<div class="booking-state-box resolution_required" id="participantBookingCard">' +
+            '<div class="booking-state-header">' +
+              '<span class="status-badge status-badge-resolution_required">⚠ Payment Resolution Required</span>' +
+              '<span class="fine-print">Booking ID: <code>' + esc(myReg.id) + '</code></span>' +
+            '</div>' +
+            '<p style="margin:4px 0 8px;color:#991b1b">' +
+              esc(myReg.resolution_reason || 'This booking has a payment record requiring manual organizer resolution.') +
+            '</p>' +
+            '<div class="booking-actions-row">' +
+              '<button class="btn btn-light" type="button" id="reconcileEventPaymentBtn" data-reg-id="' + esc(myReg.id) + '">↻ Reconcile Status</button>' +
+              '<a class="btn btn-light" href="dashboard-participant.html#myBookingsSection">View in My Bookings →</a>' +
+            '</div>' +
+          '</div>' +
+          '<p id="regMessage" class="form-message" aria-live="polite"></p>' +
+          secondaryExtHtml;
+      } else {
+        const prevHistoryNote = myReg && (regStatus === 'cancelled' || regStatus === 'expired')
+          ? '<div class="fine-print" style="margin-bottom:8px">Previous booking status: <strong>' + esc(myReg.status_label) + '</strong>' +
+            (latestPay ? ' · <button type="button" class="text-link" id="reconcileEventPaymentBtn" data-reg-id="' + esc(myReg.id) + '" style="background:none;border:none;padding:0;cursor:pointer">Reconcile previous payment</button>' : '') +
+            '</div>'
+          : '';
+
+        let primaryBtnHtml = '';
+        if (e.status !== 'published') {
+          primaryBtnHtml = '<button class="btn btn-light full-width" type="button" disabled>Registration Closed (Event ' + esc(e.status) + ')</button>';
+        } else if (deadlinePassed) {
+          primaryBtnHtml = '<button class="btn btn-light full-width" type="button" disabled>Registration Deadline Passed</button>';
+        } else if (isSoldOut) {
+          primaryBtnHtml = '<button class="btn btn-light full-width" type="button" disabled>Sold Out — No Seats Remaining</button>';
+        } else if (e.priceType === 'paid' && e.priceAmount > 0) {
+          primaryBtnHtml =
+            '<button class="btn btn-primary full-width" id="inAppRegisterBtn" type="button">' +
+              'Book Seat &amp; Pay ₹' + esc(e.priceAmount) + ' (Razorpay Test Mode) →' +
+            '</button>' +
+            '<p class="fine-print">Reserves 1 seat for 15 minutes while you complete Razorpay Test Mode checkout.</p>';
+        } else {
+          primaryBtnHtml =
+            '<button class="btn btn-primary full-width" id="inAppRegisterBtn" type="button">' +
+              'Register Now (Free Entry) →' +
+            '</button>' +
+            '<p class="fine-print">Instant seat confirmation with automated email acknowledgement and 24-hour event reminder.</p>';
+        }
+
+        actionHtml =
+          prevHistoryNote +
+          primaryBtnHtml +
+          '<p id="regMessage" class="form-message" aria-live="polite"></p>' +
+          secondaryExtHtml;
+      }
     } else if (own) {
       actionHtml = '<a class="btn btn-light full-width" href="dashboard-organizer.html?edit=' + encodeURIComponent(e.id) + '">Edit in dashboard →</a>';
     } else {
@@ -1357,19 +2066,109 @@
         '<p class="muted">Organized by ' + esc(e.organizerName) + '</p>' +
         '<div class="event-meta">📅 ' + esc(fmtDate(e.date)) + (e.time ? ' · ⏰ ' + esc(fmtTime(e.time)) : '') + '</div>' +
         '<div class="event-meta">📍 ' + esc(e.venue ? e.venue + ', ' : '') + esc(e.city) + ' · ' + esc(e.mode) + '</div>' +
+        capacityMeterHtml +
         '<fieldset><legend>About this event</legend><p>' + esc(e.description) + '</p></fieldset>' +
         (e.details ? '<fieldset><legend>Details</legend><p class="pre">' + esc(e.details) + '</p></fieldset>' : '') +
         '<div class="stack">' + actionHtml + '</div>' +
       '</section>';
 
-    const regBtn = $('stage3RegisterBtn');
+    const regBtn = $('inAppRegisterBtn');
     if (regBtn) {
-      regBtn.addEventListener('click', () => {
+      regBtn.addEventListener('click', async () => {
+        regBtn.disabled = true;
         say(
-          'In-app registration is not yet available in Stage 2: POST /api/registrations/{event_id} will be enabled in Stage 3.',
-          false,
+          e.priceType === 'paid'
+            ? 'Reserving your seat for 15 minutes and preparing Razorpay Test Mode order…'
+            : 'Confirming your free registration…',
+          true,
           'regMessage'
         );
+        try {
+          const mutRes = await apiRequest('/api/registrations/' + encodeURIComponent(e.id), {
+            method: 'POST',
+            body: {}
+          });
+          if (mutRes.razorpay_checkout) {
+            startRazorpayCheckout(mutRes, async (finalRes) => {
+              await initEventPage(user);
+              if (finalRes && finalRes.message) {
+                say(finalRes.message, finalRes.booking_status === 'confirmed', 'regMessage');
+              }
+            });
+          } else {
+            await initEventPage(user);
+            say(mutRes.message || 'Booking confirmed!', true, 'regMessage');
+          }
+        } catch (err) {
+          say(err.message || 'Could not complete registration.', false, 'regMessage');
+          regBtn.disabled = false;
+        }
+      });
+    }
+
+    const retryBtn = $('retryEventPaymentBtn');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', async () => {
+        const regId = retryBtn.getAttribute('data-reg-id');
+        retryBtn.disabled = true;
+        say('Creating new Razorpay Test Mode payment order…', true, 'regMessage');
+        try {
+          const orderRes = await apiRequest('/api/registrations/' + encodeURIComponent(regId) + '/payment-order', {
+            method: 'POST'
+          });
+          startRazorpayCheckout(orderRes, async (finalRes) => {
+            await initEventPage(user);
+            if (finalRes && finalRes.message) {
+              say(finalRes.message, finalRes.booking_status === 'confirmed', 'regMessage');
+            }
+          });
+        } catch (err) {
+          say(err.message || 'Could not start payment retry.', false, 'regMessage');
+          retryBtn.disabled = false;
+        }
+      });
+    }
+
+    const reconcileBtn = $('reconcileEventPaymentBtn');
+    if (reconcileBtn) {
+      reconcileBtn.addEventListener('click', async () => {
+        const regId = reconcileBtn.getAttribute('data-reg-id');
+        reconcileBtn.disabled = true;
+        say('Reconciling payment status with server…', true, 'regMessage');
+        try {
+          const recRes = await apiRequest('/api/registrations/' + encodeURIComponent(regId) + '/reconcile', {
+            method: 'POST',
+            body: {}
+          });
+          await initEventPage(user);
+          say(recRes.message || 'Status reconciled.', recRes.booking_status === 'confirmed', 'regMessage');
+        } catch (err) {
+          say(err.message || 'Could not reconcile payment.', false, 'regMessage');
+          reconcileBtn.disabled = false;
+        }
+      });
+    }
+
+    const cancelBtn = $('cancelEventBookingBtn');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', async () => {
+        const regId = cancelBtn.getAttribute('data-reg-id');
+        if (!confirm('Cancel this booking? Your seat will be released and future reminders suppressed. Note: Cancellation does not perform or imply a payment refund.')) {
+          return;
+        }
+        cancelBtn.disabled = true;
+        say('Cancelling booking…', true, 'regMessage');
+        try {
+          const cancelRes = await apiRequest('/api/registrations/' + encodeURIComponent(regId) + '/cancel', {
+            method: 'POST',
+            body: { reason: 'Cancelled by participant on event page' }
+          });
+          await initEventPage(user);
+          say(cancelRes.message || 'Booking cancelled.', true, 'regMessage');
+        } catch (err) {
+          say(err.message || 'Could not cancel booking.', false, 'regMessage');
+          cancelBtn.disabled = false;
+        }
       });
     }
   }
